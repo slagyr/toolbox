@@ -2,20 +2,22 @@
 
 Portable, versioned skill management for AI coding agents.
 
-**The problem:** Agent skills live at machine-specific paths (`~/.config/agents/skills/tdd/SKILL.md`). When agents run on different machines, CI environments, or cloud workers, those paths don't exist. Your carefully crafted instructions break.
+**The problem:** Agent skills live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`). When agents run on different machines, CI environments, or cloud workers, those paths don't exist. Your carefully crafted instructions break.
 
-**The solution:** Declare skills by URL in your project's `AGENTS.md`. Toolbox teaches agents how to fetch, cache, and update them. Works everywhere, no installation required.
+**The solution:** Declare skills by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox teaches agents how to fetch, cache, and update them. Works everywhere, no installation required.
 
 ## Quick Start
 
-Add a `## Skills` section to your project's `AGENTS.md`:
+Add a `## Skills` section to your project's boot file (`AGENTS.md`, `CLAUDE.md`, etc.):
 
 ```markdown
 ## Skills
 
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
 to manage skills. If `.skills/` doesn't exist, fetch the toolbox SKILL.md
-from the URL above and follow its instructions.
+from the URL above and follow its instructions. Once bootstrapped, load
+skills from `.skills/{name}/SKILL.md` when their descriptions match the
+task at hand.
 
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
@@ -23,11 +25,11 @@ from the URL above and follow its instructions.
 
 Add `.skills/` to your `.gitignore`. Done.
 
-When an agent reads your `AGENTS.md`, it fetches the toolbox skill, learns how to resolve skill URLs, and caches everything locally in `.skills/`.
+When an agent reads your boot file, it fetches the toolbox skill, learns how to resolve skill URLs, and caches everything locally in `.skills/`.
 
 ## How It Works
 
-1. Agent reads `AGENTS.md`, finds the `## Skills` section
+1. Agent reads the boot file, finds the `## Skills` section
 2. On first run, fetches each skill's `SKILL.md` (and any linked references) into `.skills/`
 3. Creates `.skills/toolbox.json` manifest with content hashes for change detection
 4. On subsequent runs, uses the cached copies instantly

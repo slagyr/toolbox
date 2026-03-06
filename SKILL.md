@@ -1,24 +1,28 @@
 ---
 name: toolbox
-description: Manages skill dependencies for a project. Parses skill URLs from AGENTS.md, fetches them into a local .skills/ cache, tracks freshness, and updates on demand. Use this skill when a project's AGENTS.md declares skills via URL.
+description: Manages skill dependencies for a project. Parses skill URLs from the project's boot file, fetches them into a local .skills/ cache, tracks freshness, and updates on demand. Use this skill when a project's boot file declares skills via URL.
 ---
 
 # Toolbox — Skill Management
 
-Resolve, cache, and update skill dependencies declared in a project's `AGENTS.md`.
+Resolve, cache, and update skill dependencies declared in a project's boot file.
 
 ## When This Skill Applies
 
-When you land in a project and `AGENTS.md` contains a `## Skills` section with a link to this skill (toolbox), follow the procedure below to ensure all declared skills are available locally before doing any work.
+When you land in a project and the boot file contains a `## Skills` section with a link to this skill (toolbox), follow the procedure below to ensure all declared skills are available locally before doing any work.
 
 ## How Skills Are Declared
 
-Skills are declared in the project's `AGENTS.md` under a `## Skills` section. Each skill is a markdown link in a bullet list:
+Skills are declared in the project's boot file under a `## Skills` section. The boot file is whatever file the agent reads on startup — `AGENTS.md`, `CLAUDE.md`, or any platform-specific equivalent. Each skill is a markdown link in a bullet list:
 
 ```markdown
 ## Skills
 
-This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md) to manage skills. If `.skills/` doesn't exist, fetch the toolbox SKILL.md from the URL above and follow its instructions.
+This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
+to manage skills. If `.skills/` doesn't exist, fetch the toolbox SKILL.md
+from the URL above and follow its instructions. Once bootstrapped, load
+skills from `.skills/{name}/SKILL.md` when their descriptions match the
+task at hand.
 
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
@@ -42,7 +46,7 @@ Look for `.skills/toolbox.json` in the project root.
 When `.skills/toolbox.json` is missing:
 
 1. Create the `.skills/` directory in the project root.
-2. Parse the `## Skills` section of `AGENTS.md` for skill links. Extract each `[name](url)` pair.
+2. Parse the `## Skills` section of the boot file for skill links. Extract each `[name](url)` pair.
 3. For each declared skill (including toolbox itself):
    a. Fetch `SKILL.md` from the skill's URL.
    b. Compute the SHA-256 hash of the fetched `SKILL.md` content.
@@ -127,13 +131,13 @@ Toolbox detects updates by comparing content, not by time. Each skill's `sha256`
 
 When the user asks to update skills (e.g., "update skills", "refresh skills"):
 
-1. Re-parse `AGENTS.md` for the current skill declarations. This catches added or removed skills.
+1. Re-parse the boot file for the current skill declarations. This catches added or removed skills.
 2. For each declared skill:
    a. Re-fetch `SKILL.md` from the URL.
    b. Re-discover and fetch reference files.
    c. Overwrite the cached files in `.skills/{name}/`.
    d. Update `fetched_at` and `sha256` in the manifest.
-3. Remove any cached skills that are no longer declared in `AGENTS.md`.
+3. Remove any cached skills that are no longer declared in the boot file.
 4. Write the updated `.skills/toolbox.json`.
 
 ### 6. Read Skills
