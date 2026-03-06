@@ -31,6 +31,7 @@ task at hand.
 - The **link text** is the skill name.
 - The **URL** points to the skill's `SKILL.md` entry point.
 - Both `https://` and `file://` URLs are supported.
+- Skill names must be unique. If duplicates are found, warn the user and use the last declaration.
 
 ## Procedure
 
@@ -47,18 +48,18 @@ When `.skills/toolbox.json` is missing:
 
 1. Create the `.skills/` directory in the project root.
 2. Parse the `## Skills` section of the boot file for skill links. Extract each `[name](url)` pair.
-3. For each declared skill (including toolbox itself):
+3. For each declared skill (including toolbox itself — use the already-fetched copy rather than re-fetching):
    a. Fetch `SKILL.md` from the skill's URL.
-   b. Compute the SHA-256 hash of the fetched `SKILL.md` content.
-   c. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
-   d. Compute the base URL by removing `SKILL.md` from the skill's URL. Fetch each discovered reference file relative to that base URL.
-   e. Write all fetched files into `.skills/{name}/`, preserving directory structure.
+   b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
+   c. Compute the base URL by removing `SKILL.md` from the skill's URL. Fetch each discovered reference file relative to that base URL.
+   d. Write all fetched files into `.skills/{name}/`, preserving directory structure.
+   e. Compute a SHA-256 hash covering all fetched files (concatenate file contents in sorted order by path, then hash).
 4. Write `.skills/toolbox.json` with the manifest (see §3).
 5. Ensure `.skills/` is listed in the project's `.gitignore`. If not, add it.
 
 ### 3. The Manifest — `.skills/toolbox.json`
 
-The manifest tracks all cached skills, their source URLs, fetched files, and content hashes for change detection.
+The manifest tracks all cached skills, their source URLs, fetched files, and content hashes for change detection. Example (hashes and timestamps are illustrative):
 
 ```json
 {
@@ -102,19 +103,19 @@ The manifest tracks all cached skills, their source URLs, fetched files, and con
 | `skills` | Map of skill name → skill entry. |
 | `skills.{name}.url` | The URL from which `SKILL.md` was fetched. |
 | `skills.{name}.fetched_at` | ISO 8601 timestamp of when the skill was last fetched. |
-| `skills.{name}.sha256` | SHA-256 hash of the skill's `SKILL.md` content at fetch time. Used to detect remote changes. |
+| `skills.{name}.sha256` | SHA-256 hash covering all of the skill's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
 | `skills.{name}.files` | List of all files cached for this skill, relative to `.skills/{name}/`. |
 
 ### 4. Check for Updates
 
-Toolbox detects updates by comparing content, not by time. Each skill's `sha256` in the manifest is the hash of its `SKILL.md` at fetch time.
+Toolbox detects updates by comparing content, not by time. Each skill's `sha256` in the manifest is the hash of all its files at fetch time.
 
 **On session start**, if the cached skills exist, proceed silently. Do not fetch anything automatically — the cached versions are ready to use.
 
 **When the user asks** (e.g., "check for skill updates", "are my skills up to date?"):
 
-1. For each skill in the manifest, fetch `SKILL.md` from the URL.
-2. Compute the SHA-256 hash of the fetched content.
+1. For each skill in the manifest, fetch `SKILL.md` and all reference files from the URL.
+2. Compute the SHA-256 hash covering all fetched files (same method as bootstrap).
 3. Compare to the stored `sha256` in the manifest.
 4. Report results:
    ```
@@ -124,8 +125,6 @@ Toolbox detects updates by comparing content, not by time. Each skill's `sha256`
    Update skills? [y/n]
    ```
 5. If the user confirms, proceed with §5 (Update Skills) for the changed skills.
-
-**Automated check (optional):** If the agent platform supports lightweight HTTP requests at session start, toolbox may proactively check for updates and report only if changes are detected. This is a nice-to-have, not required. Never auto-update — always ask the user before overwriting cached skills.
 
 ### 5. Update Skills
 
@@ -160,6 +159,8 @@ To pin a specific version, use a commit SHA instead of a branch name:
 https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{name}/SKILL.md
 ```
 
+**Private repos:** `raw.githubusercontent.com` does not serve files from private repositories without authentication. For private skills, use `file://` URLs or a URL that includes an access token.
+
 ### `file://`
 
 Copy from the local filesystem. Useful for:
@@ -185,8 +186,19 @@ When fetching a skill's `SKILL.md`, parse it for relative markdown links to disc
 **Exclude:**
 - Absolute URLs (`https://...`, `http://...`, `file://...`)
 - Anchor links (`#section`)
-- Non-markdown files (unless explicitly linked)
 
 **Resolve:** Given a skill URL like `https://example.com/skills/solid/SKILL.md`, the base URL is `https://example.com/skills/solid/`. A reference `references/tdd.md` resolves to `https://example.com/skills/solid/references/tdd.md`.
 
 For `file://` URLs, the same logic applies using filesystem paths.
+
+## Error Handling
+
+- **Fetch failure (single skill):** If a skill's URL returns an error (404, timeout, network unavailable), warn the user and skip that skill. Do not block the entire bootstrap or update process.
+- **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
+- **No `## Skills` section:** If the boot file has no `## Skills` section, toolbox does not apply. Do nothing.
+- **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip.
+- **General rule:** Never silently swallow errors. Always inform the user what failed and why.
+
+## Limitations
+
+- **No skill dependencies.** Toolbox treats each skill as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both skills explicitly.

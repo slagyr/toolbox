@@ -97,4 +97,4 @@ Toolbox discovers reference files automatically by parsing relative markdown lin
 
 ## Update Detection
 
-Toolbox stores a SHA-256 hash of each skill's `SKILL.md` at fetch time. When you ask to check for updates, it re-fetches and compares hashes — only reporting skills whose content has actually changed. No polling, no timers, no wasted fetches.
+Toolbox stores a SHA-256 hash covering all of a skill's files at fetch time. When you ask to check for updates, it re-fetches and compares hashes — only reporting skills whose content has actually changed. No polling, no timers, no wasted fetches.
