@@ -1,6 +1,6 @@
 ---
 name: toolbox
-description: Manages component dependencies (skills, commands) for a project. Parses component URLs from the project's boot file, fetches them into a local .toolbox/ cache, tracks freshness, and updates on demand. Use this skill when a project's boot file declares components via URL.
+description: Manages component dependencies (skills, commands, rules, modes, agents) for a project. Parses component URLs from the project's boot file, fetches them into a local .toolbox/ cache, tracks freshness, and updates on demand. Use this skill when a project's boot file declares components via URL.
 ---
 
 # Toolbox — Component Management
@@ -25,11 +25,35 @@ Skills are instruction sets that teach agents how to perform specific tasks. A s
 
 ### Commands
 
-Commands are single-file agent instructions invoked by name (e.g., `/test`, `/deploy`). A command is a single markdown file with no frontmatter or references.
+Commands are single-file agent instructions invoked by name (e.g., `/test`, `/deploy`). A command is a single markdown file.
 
 - **Boot file section:** `### Commands` (under `## Toolbox`)
 - **Cache location:** `.toolbox/commands/{name}.md`
 - **Reference discovery:** No — commands are single files.
+
+### Rules
+
+Rules are behavioral constraints that modify how the agent operates (e.g., "always write tests", "never push to main"). A rule is a single markdown file.
+
+- **Boot file section:** `### Rules` (under `## Toolbox`)
+- **Cache location:** `.toolbox/rules/{name}.md`
+- **Reference discovery:** No — rules are single files.
+
+### Modes
+
+Modes are operating profiles that configure the agent's behavior for a specific workflow (e.g., code-review, architect, planner). A mode is a single markdown file.
+
+- **Boot file section:** `### Modes` (under `## Toolbox`)
+- **Cache location:** `.toolbox/modes/{name}.md`
+- **Reference discovery:** No — modes are single files.
+
+### Agents
+
+Agents are full persona definitions with system prompts and tool configurations. An agent is a single markdown file.
+
+- **Boot file section:** `### Agents` (under `## Toolbox`)
+- **Cache location:** `.toolbox/agents/{name}.md`
+- **Reference discovery:** No — agents are single files.
 
 ## How Components Are Declared
 
@@ -41,8 +65,9 @@ Components are declared in the project's boot file under a `## Toolbox` section.
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
 to manage agent components. If `.toolbox/` doesn't exist, fetch the toolbox
 SKILL.md from the URL above and follow its instructions. Once bootstrapped,
-load skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions
-match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
+components are cached locally in `.toolbox/` organized by type. Load skills
+from `.toolbox/skills/{name}/SKILL.md` when their descriptions match the task
+at hand. Other components are at `.toolbox/{type}/{name}.md`.
 
 ### Skills
 
@@ -53,6 +78,18 @@ match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
 
 - [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
 - [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
+
+### Rules
+
+- [no-force-push](https://raw.githubusercontent.com/slagyr/agent-lib/main/rules/no-force-push.md)
+
+### Modes
+
+- [architect](https://raw.githubusercontent.com/slagyr/agent-lib/main/modes/architect.md)
+
+### Agents
+
+- [reviewer](https://raw.githubusercontent.com/slagyr/agent-lib/main/agents/reviewer.md)
 ```
 
 - The **link text** is the component name.
@@ -74,16 +111,16 @@ Look for `.toolbox/toolbox.json` in the project root.
 When `.toolbox/toolbox.json` is missing:
 
 1. Create the `.toolbox/` directory in the project root.
-2. Parse the `## Toolbox` section of the boot file for component subsections (`### Skills`, `### Commands`). Extract each `[name](url)` pair.
+2. Parse the `## Toolbox` section of the boot file for component subsections (`### Skills`, `### Commands`, `### Rules`, `### Modes`, `### Agents`). Extract each `[name](url)` pair.
 3. For each declared skill (including toolbox itself — use the already-fetched copy rather than re-fetching):
    a. Fetch `SKILL.md` from the skill's URL.
    b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
    c. Compute the base URL by removing `SKILL.md` from the skill's URL. Fetch each discovered reference file relative to that base URL.
    d. Write all fetched files into `.toolbox/skills/{name}/`, preserving directory structure.
    e. Compute a SHA-256 hash covering all fetched files (concatenate file contents in sorted order by path, then hash).
-4. For each declared command:
-   a. Fetch the command file from the URL.
-   b. Write it to `.toolbox/commands/{name}.md`.
+4. For each single-file component (commands, rules, modes, agents):
+   a. Fetch the file from the URL.
+   b. Write it to `.toolbox/{type}/{name}.md`.
    c. Compute the SHA-256 hash of the fetched content.
 5. Write `.toolbox/toolbox.json` with the manifest (see §3).
 6. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it.
@@ -130,12 +167,30 @@ The manifest tracks all cached components, their source URLs, fetched files, and
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "d4e5f6a1b2c3...",
       "files": ["test.md"]
-    },
-    "deploy": {
-      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md",
+    }
+  },
+  "rules": {
+    "no-force-push": {
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/rules/no-force-push.md",
       "fetched_at": "2026-03-06T12:00:00Z",
-      "sha256": "b2c3d4e5f6a1...",
-      "files": ["deploy.md"]
+      "sha256": "c3d4e5f6a1b2...",
+      "files": ["no-force-push.md"]
+    }
+  },
+  "modes": {
+    "architect": {
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/modes/architect.md",
+      "fetched_at": "2026-03-06T12:00:00Z",
+      "sha256": "e5f6a1b2c3d4...",
+      "files": ["architect.md"]
+    }
+  },
+  "agents": {
+    "reviewer": {
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/agents/reviewer.md",
+      "fetched_at": "2026-03-06T12:00:00Z",
+      "sha256": "a1b2c3d4e5f6...",
+      "files": ["reviewer.md"]
     }
   }
 }
@@ -147,6 +202,9 @@ The manifest tracks all cached components, their source URLs, fetched files, and
 |-------|-------------|
 | `skills` | Map of skill name → skill entry. |
 | `commands` | Map of command name → command entry. |
+| `rules` | Map of rule name → rule entry. |
+| `modes` | Map of mode name → mode entry. |
+| `agents` | Map of agent name → agent entry. |
 | `{type}.{name}.url` | The URL from which the component was fetched. |
 | `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
 | `{type}.{name}.sha256` | SHA-256 hash covering all of the component's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
@@ -170,8 +228,9 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
        - braids (changed)
        - tdd (up to date)
      Commands:
-       - test (changed)
-       - deploy (up to date)
+       - test (up to date)
+     Rules:
+       - no-force-push (changed)
    Update? [y/n]
    ```
 5. If the user confirms, proceed with §5 (Update) for the changed components.
@@ -192,7 +251,7 @@ When the user asks to update (e.g., "update skills", "refresh components"):
 ### 6. Read Components
 
 - **Skills:** Read from `.toolbox/skills/{name}/SKILL.md`. References are at `.toolbox/skills/{name}/references/` (or wherever the skill's relative links point).
-- **Commands:** Read from `.toolbox/commands/{name}.md`.
+- **Single-file components** (commands, rules, modes, agents): Read from `.toolbox/{type}/{name}.md`.
 
 ## URL Schemes
 
@@ -242,7 +301,7 @@ When fetching a skill's `SKILL.md`, parse it for relative markdown links to disc
 
 For `file://` URLs, the same logic applies using filesystem paths.
 
-Reference discovery applies only to skills. Commands are single files with no references.
+Reference discovery applies only to skills. All other component types are single files with no references.
 
 ## Error Handling
 

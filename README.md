@@ -16,8 +16,9 @@ Add a `## Toolbox` section to your project's boot file (`AGENTS.md`, `CLAUDE.md`
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
 to manage agent components. If `.toolbox/` doesn't exist, fetch the toolbox
 SKILL.md from the URL above and follow its instructions. Once bootstrapped,
-load skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions
-match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
+components are cached locally in `.toolbox/` organized by type. Load skills
+from `.toolbox/skills/{name}/SKILL.md` when their descriptions match the task
+at hand. Other components are at `.toolbox/{type}/{name}.md`.
 
 ### Skills
 
@@ -27,7 +28,18 @@ match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
 ### Commands
 
 - [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
-- [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
+
+### Rules
+
+- [no-force-push](https://raw.githubusercontent.com/slagyr/agent-lib/main/rules/no-force-push.md)
+
+### Modes
+
+- [architect](https://raw.githubusercontent.com/slagyr/agent-lib/main/modes/architect.md)
+
+### Agents
+
+- [reviewer](https://raw.githubusercontent.com/slagyr/agent-lib/main/agents/reviewer.md)
 ```
 
 Add `.toolbox/` to your `.gitignore`. Done.
@@ -75,7 +87,19 @@ See: [references/details.md](references/details.md)
 
 ### Commands
 
-Commands are single markdown files — no frontmatter, no references, no directory structure. A command named `test` is just `test.md`.
+Commands are single markdown files invoked by name (e.g., `/test`). No frontmatter, no references, no directory structure.
+
+### Rules
+
+Rules are behavioral constraints — single markdown files that modify how the agent operates (e.g., "always write tests", "never push to main").
+
+### Modes
+
+Modes are operating profiles — single markdown files that configure the agent for a specific workflow (e.g., code-review, architect, planner).
+
+### Agents
+
+Agents are persona definitions — single markdown files with system prompts and tool configurations.
 
 ## Component Sources
 
