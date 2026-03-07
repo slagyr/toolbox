@@ -6,6 +6,8 @@ Portable, versioned component management for AI coding agents.
 
 **The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox teaches agents how to fetch, cache, and update them. Works everywhere, no installation required.
 
+**Light token footprint:** The boot file section adds ~300-400 tokens to your agent's context — comparable to a few lines of project instructions. The full toolbox spec is only loaded during first-run bootstrap or updates, never on every session.
+
 ## Quick Start
 
 Add a `## Toolbox` section to your project's boot file (`AGENTS.md`, `CLAUDE.md`, etc.):
