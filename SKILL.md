@@ -64,10 +64,13 @@ Components are declared in the project's boot file under a `## Toolbox` section.
 
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
 to manage agent components. If `.toolbox/` doesn't exist, fetch the toolbox
-SKILL.md from the URL above and follow its instructions. Once bootstrapped,
-components are cached locally in `.toolbox/` organized by type. Load skills
-from `.toolbox/skills/{name}/SKILL.md` when their descriptions match the task
-at hand. Other components are at `.toolbox/{type}/{name}.md`.
+SKILL.md from the URL above and follow its instructions. Once bootstrapped:
+
+- **Skills:** Load from `.toolbox/skills/{name}/SKILL.md` when their descriptions match the task at hand.
+- **Commands:** When the user invokes a command by name (e.g., "/test"), read and follow `.toolbox/commands/{name}.md`.
+- **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
+- **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
+- **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
 
 ### Skills
 
@@ -248,10 +251,13 @@ When the user asks to update (e.g., "update skills", "refresh components"):
 3. Remove any cached components that are no longer declared in the boot file.
 4. Write the updated `.toolbox/toolbox.json`.
 
-### 6. Read Components
+### 6. Use Components
 
-- **Skills:** Read from `.toolbox/skills/{name}/SKILL.md`. References are at `.toolbox/skills/{name}/references/` (or wherever the skill's relative links point).
-- **Single-file components** (commands, rules, modes, agents): Read from `.toolbox/{type}/{name}.md`.
+- **Skills:** Load from `.toolbox/skills/{name}/SKILL.md` when the skill's description matches the current task. References are at `.toolbox/skills/{name}/references/` (or wherever the skill's relative links point).
+- **Commands:** When the user invokes a command by name (e.g., "/test"), read and follow `.toolbox/commands/{name}.md`.
+- **Rules:** Read and apply all rules from `.toolbox/rules/` at session start. Rules are always active.
+- **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
+- **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
 
 ## URL Schemes
 
