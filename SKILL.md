@@ -1,65 +1,94 @@
 ---
 name: toolbox
-description: Manages skill dependencies for a project. Parses skill URLs from the project's boot file, fetches them into a local .skills/ cache, tracks freshness, and updates on demand. Use this skill when a project's boot file declares skills via URL.
+description: Manages component dependencies (skills, commands) for a project. Parses component URLs from the project's boot file, fetches them into a local .toolbox/ cache, tracks freshness, and updates on demand. Use this skill when a project's boot file declares components via URL.
 ---
 
-# Toolbox — Skill Management
+# Toolbox — Component Management
 
-Resolve, cache, and update skill dependencies declared in a project's boot file.
+Resolve, cache, and update component dependencies declared in a project's boot file.
 
 ## When This Skill Applies
 
-When you land in a project and the boot file contains a `## Skills` section with a link to this skill (toolbox), follow the procedure below to ensure all declared skills are available locally before doing any work.
+When you land in a project and the boot file contains a `## Skills` or `## Commands` section with a link to this skill (toolbox), follow the procedure below to ensure all declared components are available locally before doing any work.
 
-## How Skills Are Declared
+## Component Types
 
-Skills are declared in the project's boot file under a `## Skills` section. The boot file is whatever file the agent reads on startup — `AGENTS.md`, `CLAUDE.md`, or any platform-specific equivalent. Each skill is a markdown link in a bullet list:
+Toolbox manages different types of agent components. Each type has its own section in the boot file, its own cache subdirectory, and its own entry in the manifest.
+
+### Skills
+
+Skills are instruction sets that teach agents how to perform specific tasks. A skill is a directory with a `SKILL.md` entry point and optional reference files.
+
+- **Boot file section:** `## Skills`
+- **Cache location:** `.toolbox/skills/{name}/SKILL.md`
+- **Reference discovery:** Yes — relative markdown links in `SKILL.md` are fetched automatically.
+
+### Commands
+
+Commands are single-file agent instructions invoked by name (e.g., `/test`, `/deploy`). A command is a single markdown file with no frontmatter or references.
+
+- **Boot file section:** `## Commands`
+- **Cache location:** `.toolbox/commands/{name}.md`
+- **Reference discovery:** No — commands are single files.
+
+## How Components Are Declared
+
+Components are declared in the project's boot file under their respective sections. The boot file is whatever file the agent reads on startup — `AGENTS.md`, `CLAUDE.md`, or any platform-specific equivalent. Each component is a markdown link in a bullet list:
 
 ```markdown
 ## Skills
 
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
-to manage skills. If `.skills/` doesn't exist, fetch the toolbox SKILL.md
+to manage components. If `.toolbox/` doesn't exist, fetch the toolbox SKILL.md
 from the URL above and follow its instructions. Once bootstrapped, load
-skills from `.skills/{name}/SKILL.md` when their descriptions match the
-task at hand.
+skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions match
+the task at hand.
 
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
+
+## Commands
+
+- [test](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md)
+- [deploy](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/deploy.md)
 ```
 
-- The **link text** is the skill name.
-- The **URL** points to the skill's `SKILL.md` entry point.
+- The **link text** is the component name.
+- The **URL** points to the component's entry point.
 - Both `https://` and `file://` URLs are supported.
-- Skill names must be unique. If duplicates are found, warn the user and use the last declaration.
+- Component names must be unique within their type. If duplicates are found, warn the user and use the last declaration.
 
 ## Procedure
 
-### 1. Check for Cached Skills
+### 1. Check for Cached Components
 
-Look for `.skills/toolbox.json` in the project root.
+Look for `.toolbox/toolbox.json` in the project root.
 
-- **If it exists**: skills have been fetched before. Check for updates (see §4).
+- **If it exists**: components have been fetched before. Read cached components and proceed (see §6). Check for updates only when the user asks (see §4).
 - **If it doesn't exist**: bootstrap (see §2).
 
 ### 2. Bootstrap (First Run)
 
-When `.skills/toolbox.json` is missing:
+When `.toolbox/toolbox.json` is missing:
 
-1. Create the `.skills/` directory in the project root.
-2. Parse the `## Skills` section of the boot file for skill links. Extract each `[name](url)` pair.
+1. Create the `.toolbox/` directory in the project root.
+2. Parse the boot file for component sections (`## Skills`, `## Commands`). Extract each `[name](url)` pair.
 3. For each declared skill (including toolbox itself — use the already-fetched copy rather than re-fetching):
    a. Fetch `SKILL.md` from the skill's URL.
    b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
    c. Compute the base URL by removing `SKILL.md` from the skill's URL. Fetch each discovered reference file relative to that base URL.
-   d. Write all fetched files into `.skills/{name}/`, preserving directory structure.
+   d. Write all fetched files into `.toolbox/skills/{name}/`, preserving directory structure.
    e. Compute a SHA-256 hash covering all fetched files (concatenate file contents in sorted order by path, then hash).
-4. Write `.skills/toolbox.json` with the manifest (see §3).
-5. Ensure `.skills/` is listed in the project's `.gitignore`. If not, add it.
+4. For each declared command:
+   a. Fetch the command file from the URL.
+   b. Write it to `.toolbox/commands/{name}.md`.
+   c. Compute the SHA-256 hash of the fetched content.
+5. Write `.toolbox/toolbox.json` with the manifest (see §3).
+6. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it.
 
-### 3. The Manifest — `.skills/toolbox.json`
+### 3. The Manifest — `.toolbox/toolbox.json`
 
-The manifest tracks all cached skills, their source URLs, fetched files, and content hashes for change detection. Example (hashes and timestamps are illustrative):
+The manifest tracks all cached components, their source URLs, fetched files, and content hashes for change detection. Example (hashes and timestamps are illustrative):
 
 ```json
 {
@@ -92,6 +121,20 @@ The manifest tracks all cached skills, their source URLs, fetched files, and con
         "references/worker-agent-template.md"
       ]
     }
+  },
+  "commands": {
+    "test": {
+      "url": "https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md",
+      "fetched_at": "2026-03-06T12:00:00Z",
+      "sha256": "d4e5f6a1b2c3...",
+      "files": ["test.md"]
+    },
+    "deploy": {
+      "url": "https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/deploy.md",
+      "fetched_at": "2026-03-06T12:00:00Z",
+      "sha256": "b2c3d4e5f6a1...",
+      "files": ["deploy.md"]
+    }
   }
 }
 ```
@@ -101,79 +144,85 @@ The manifest tracks all cached skills, their source URLs, fetched files, and con
 | Field | Description |
 |-------|-------------|
 | `skills` | Map of skill name → skill entry. |
-| `skills.{name}.url` | The URL from which `SKILL.md` was fetched. |
-| `skills.{name}.fetched_at` | ISO 8601 timestamp of when the skill was last fetched. |
-| `skills.{name}.sha256` | SHA-256 hash covering all of the skill's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
-| `skills.{name}.files` | List of all files cached for this skill, relative to `.skills/{name}/`. |
+| `commands` | Map of command name → command entry. |
+| `{type}.{name}.url` | The URL from which the component was fetched. |
+| `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
+| `{type}.{name}.sha256` | SHA-256 hash covering all of the component's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
+| `{type}.{name}.files` | List of all files cached for this component, relative to its cache directory. |
 
 ### 4. Check for Updates
 
-Toolbox detects updates by comparing content, not by time. Each skill's `sha256` in the manifest is the hash of all its files at fetch time.
+Toolbox detects updates by comparing content, not by time. Each component's `sha256` in the manifest is the hash of all its files at fetch time.
 
-**On session start**, if the cached skills exist, proceed silently. Do not fetch anything automatically — the cached versions are ready to use.
+**On session start**, if cached components exist, proceed silently. Do not fetch anything automatically — the cached versions are ready to use.
 
-**When the user asks** (e.g., "check for skill updates", "are my skills up to date?"):
+**When the user asks** (e.g., "check for updates", "are my skills up to date?"):
 
-1. For each skill in the manifest, fetch `SKILL.md` and all reference files from the URL.
+1. For each component in the manifest, fetch all files from the URL.
 2. Compute the SHA-256 hash covering all fetched files (same method as bootstrap).
 3. Compare to the stored `sha256` in the manifest.
 4. Report results:
    ```
-   Skill updates available:
-     - braids (changed)
-     - tdd (up to date)
-   Update skills? [y/n]
+   Component updates available:
+     Skills:
+       - braids (changed)
+       - tdd (up to date)
+     Commands:
+       - test (changed)
+       - deploy (up to date)
+   Update? [y/n]
    ```
-5. If the user confirms, proceed with §5 (Update Skills) for the changed skills.
+5. If the user confirms, proceed with §5 (Update) for the changed components.
 
-### 5. Update Skills
+### 5. Update Components
 
-When the user asks to update skills (e.g., "update skills", "refresh skills"):
+When the user asks to update (e.g., "update skills", "refresh components"):
 
-1. Re-parse the boot file for the current skill declarations. This catches added or removed skills.
-2. For each declared skill:
-   a. Re-fetch `SKILL.md` from the URL.
-   b. Re-discover and fetch reference files.
-   c. Overwrite the cached files in `.skills/{name}/`.
+1. Re-parse the boot file for current component declarations. This catches added or removed components.
+2. For each declared component:
+   a. Re-fetch all files from the URL.
+   b. For skills, re-discover and fetch reference files.
+   c. Overwrite the cached files.
    d. Update `fetched_at` and `sha256` in the manifest.
-3. Remove any cached skills that are no longer declared in the boot file.
-4. Write the updated `.skills/toolbox.json`.
+3. Remove any cached components that are no longer declared in the boot file.
+4. Write the updated `.toolbox/toolbox.json`.
 
-### 6. Read Skills
+### 6. Read Components
 
-When you need to read a skill's content during a session, read from `.skills/{name}/SKILL.md`. References are at `.skills/{name}/references/` (or wherever the skill's relative links point).
+- **Skills:** Read from `.toolbox/skills/{name}/SKILL.md`. References are at `.toolbox/skills/{name}/references/` (or wherever the skill's relative links point).
+- **Commands:** Read from `.toolbox/commands/{name}.md`.
 
 ## URL Schemes
 
 ### `https://`
 
-Fetch via HTTP GET. This is the primary use case for portable, published skills.
+Fetch via HTTP GET. This is the primary use case for portable, published components.
 
-For skills hosted on GitHub, use `raw.githubusercontent.com` URLs:
+For components hosted on GitHub, use `raw.githubusercontent.com` URLs:
 ```
-https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{name}/SKILL.md
+https://raw.githubusercontent.com/{owner}/{repo}/{branch}/path/to/file.md
 ```
 
 To pin a specific version, use a commit SHA instead of a branch name:
 ```
-https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{name}/SKILL.md
+https://raw.githubusercontent.com/{owner}/{repo}/{sha}/path/to/file.md
 ```
 
-**Private repos:** `raw.githubusercontent.com` does not serve files from private repositories without authentication. For private skills, use `file://` URLs or a URL that includes an access token.
+**Private repos:** `raw.githubusercontent.com` does not serve files from private repositories without authentication. For private components, use `file://` URLs or a URL that includes an access token.
 
 ### `file://`
 
 Copy from the local filesystem. Useful for:
-- Skills under active development
-- Private skills that won't be published
-- Migration from filesystem-based skill references
+- Components under active development
+- Private components that won't be published
+- Migration from filesystem-based references
 
 Example:
 ```markdown
 - [braids](file:///Users/micah/Projects/braids/braids/SKILL.md)
 ```
 
-**Note:** `file://` URLs are not portable across machines. Use `https://` for skills that need to work everywhere.
+**Note:** `file://` URLs are not portable across machines. Use `https://` for components that need to work everywhere.
 
 ## Reference Discovery
 
@@ -191,14 +240,16 @@ When fetching a skill's `SKILL.md`, parse it for relative markdown links to disc
 
 For `file://` URLs, the same logic applies using filesystem paths.
 
+Reference discovery applies only to skills. Commands are single files with no references.
+
 ## Error Handling
 
-- **Fetch failure (single skill):** If a skill's URL returns an error (404, timeout, network unavailable), warn the user and skip that skill. Do not block the entire bootstrap or update process.
+- **Fetch failure (single component):** If a component's URL returns an error (404, timeout, network unavailable), warn the user and skip that component. Do not block the entire bootstrap or update process.
 - **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
-- **No `## Skills` section:** If the boot file has no `## Skills` section, toolbox does not apply. Do nothing.
+- **No component sections:** If the boot file has no `## Skills` or `## Commands` sections, toolbox does not apply. Do nothing.
 - **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip.
 - **General rule:** Never silently swallow errors. Always inform the user what failed and why.
 
 ## Limitations
 
-- **No skill dependencies.** Toolbox treats each skill as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both skills explicitly.
+- **No component dependencies.** Toolbox treats each component as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both explicitly.
