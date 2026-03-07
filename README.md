@@ -8,21 +8,23 @@ Portable, versioned component management for AI coding agents.
 
 ## Quick Start
 
-Add component sections to your project's boot file (`AGENTS.md`, `CLAUDE.md`, etc.):
+Add a `## Toolbox` section to your project's boot file (`AGENTS.md`, `CLAUDE.md`, etc.):
 
 ```markdown
-## Skills
+## Toolbox
 
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
-to manage components. If `.toolbox/` doesn't exist, fetch the toolbox SKILL.md
-from the URL above and follow its instructions. Once bootstrapped, load
-skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions match
-the task at hand.
+to manage agent components. If `.toolbox/` doesn't exist, fetch the toolbox
+SKILL.md from the URL above and follow its instructions. Once bootstrapped,
+load skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions
+match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
+
+### Skills
 
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
 
-## Commands
+### Commands
 
 - [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
 - [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
@@ -34,7 +36,7 @@ When an agent reads your boot file, it fetches the toolbox skill, learns how to 
 
 ## How It Works
 
-1. Agent reads the boot file, finds `## Skills` and `## Commands` sections
+1. Agent reads the boot file, finds the `## Toolbox` section
 2. On first run, fetches each component into `.toolbox/`
 3. Creates `.toolbox/toolbox.json` manifest with content hashes for change detection
 4. On subsequent runs, uses the cached copies instantly

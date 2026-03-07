@@ -9,17 +9,17 @@ Resolve, cache, and update component dependencies declared in a project's boot f
 
 ## When This Skill Applies
 
-When you land in a project and the boot file contains a `## Skills` or `## Commands` section with a link to this skill (toolbox), follow the procedure below to ensure all declared components are available locally before doing any work.
+When you land in a project and the boot file contains a `## Toolbox` section with a link to this skill (toolbox), follow the procedure below to ensure all declared components are available locally before doing any work.
 
 ## Component Types
 
-Toolbox manages different types of agent components. Each type has its own section in the boot file, its own cache subdirectory, and its own entry in the manifest.
+Toolbox manages different types of agent components. Each type has its own subsection under `## Toolbox` in the boot file, its own cache subdirectory, and its own entry in the manifest.
 
 ### Skills
 
 Skills are instruction sets that teach agents how to perform specific tasks. A skill is a directory with a `SKILL.md` entry point and optional reference files.
 
-- **Boot file section:** `## Skills`
+- **Boot file section:** `### Skills` (under `## Toolbox`)
 - **Cache location:** `.toolbox/skills/{name}/SKILL.md`
 - **Reference discovery:** Yes — relative markdown links in `SKILL.md` are fetched automatically.
 
@@ -27,27 +27,29 @@ Skills are instruction sets that teach agents how to perform specific tasks. A s
 
 Commands are single-file agent instructions invoked by name (e.g., `/test`, `/deploy`). A command is a single markdown file with no frontmatter or references.
 
-- **Boot file section:** `## Commands`
+- **Boot file section:** `### Commands` (under `## Toolbox`)
 - **Cache location:** `.toolbox/commands/{name}.md`
 - **Reference discovery:** No — commands are single files.
 
 ## How Components Are Declared
 
-Components are declared in the project's boot file under their respective sections. The boot file is whatever file the agent reads on startup — `AGENTS.md`, `CLAUDE.md`, or any platform-specific equivalent. Each component is a markdown link in a bullet list:
+Components are declared in the project's boot file under a `## Toolbox` section. The boot file is whatever file the agent reads on startup — `AGENTS.md`, `CLAUDE.md`, or any platform-specific equivalent. Each component is a markdown link in a bullet list under its type subsection:
 
 ```markdown
-## Skills
+## Toolbox
 
 This project uses [toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md)
-to manage components. If `.toolbox/` doesn't exist, fetch the toolbox SKILL.md
-from the URL above and follow its instructions. Once bootstrapped, load
-skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions match
-the task at hand.
+to manage agent components. If `.toolbox/` doesn't exist, fetch the toolbox
+SKILL.md from the URL above and follow its instructions. Once bootstrapped,
+load skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions
+match the task at hand. Commands are available at `.toolbox/commands/{name}.md`.
+
+### Skills
 
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
 
-## Commands
+### Commands
 
 - [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
 - [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
@@ -72,7 +74,7 @@ Look for `.toolbox/toolbox.json` in the project root.
 When `.toolbox/toolbox.json` is missing:
 
 1. Create the `.toolbox/` directory in the project root.
-2. Parse the boot file for component sections (`## Skills`, `## Commands`). Extract each `[name](url)` pair.
+2. Parse the `## Toolbox` section of the boot file for component subsections (`### Skills`, `### Commands`). Extract each `[name](url)` pair.
 3. For each declared skill (including toolbox itself — use the already-fetched copy rather than re-fetching):
    a. Fetch `SKILL.md` from the skill's URL.
    b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
@@ -246,7 +248,7 @@ Reference discovery applies only to skills. Commands are single files with no re
 
 - **Fetch failure (single component):** If a component's URL returns an error (404, timeout, network unavailable), warn the user and skip that component. Do not block the entire bootstrap or update process.
 - **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
-- **No component sections:** If the boot file has no `## Skills` or `## Commands` sections, toolbox does not apply. Do nothing.
+- **No `## Toolbox` section:** If the boot file has no `## Toolbox` section, toolbox does not apply. Do nothing.
 - **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip.
 - **General rule:** Never silently swallow errors. Always inform the user what failed and why.
 
