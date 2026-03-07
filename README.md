@@ -19,13 +19,13 @@ from the URL above and follow its instructions. Once bootstrapped, load
 skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions match
 the task at hand.
 
-- [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
+- [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
 
 ## Commands
 
-- [test](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md)
-- [deploy](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/deploy.md)
+- [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
+- [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
 ```
 
 Add `.toolbox/` to your `.gitignore`. Done.
@@ -82,8 +82,8 @@ Components can live anywhere accessible by URL.
 ### Public repos
 
 ```markdown
-- [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
-- [test](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md)
+- [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md)
+- [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
 ```
 
 ### Local filesystem
@@ -102,7 +102,7 @@ For components under active development or private use:
 Use a commit SHA instead of a branch name to lock a component to a specific version:
 
 ```markdown
-- [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/a1b2c3d/tdd/SKILL.md)
+- [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/a1b2c3d/skills/tdd/SKILL.md)
 ```
 
 ## Update Detection

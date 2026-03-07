@@ -44,13 +44,13 @@ from the URL above and follow its instructions. Once bootstrapped, load
 skills from `.toolbox/skills/{name}/SKILL.md` when their descriptions match
 the task at hand.
 
-- [tdd](https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md)
+- [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md)
 - [braids](https://raw.githubusercontent.com/slagyr/braids/main/braids/SKILL.md)
 
 ## Commands
 
-- [test](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md)
-- [deploy](https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/deploy.md)
+- [test](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md)
+- [deploy](https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md)
 ```
 
 - The **link text** is the component name.
@@ -100,7 +100,7 @@ The manifest tracks all cached components, their source URLs, fetched files, and
       "files": ["SKILL.md"]
     },
     "tdd": {
-      "url": "https://raw.githubusercontent.com/slagyr/agent-skills/main/tdd/SKILL.md",
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "f6e5d4c3b2a1...",
       "files": ["SKILL.md"]
@@ -124,13 +124,13 @@ The manifest tracks all cached components, their source URLs, fetched files, and
   },
   "commands": {
     "test": {
-      "url": "https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/test.md",
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "d4e5f6a1b2c3...",
       "files": ["test.md"]
     },
     "deploy": {
-      "url": "https://raw.githubusercontent.com/slagyr/agent-skills/main/commands/deploy.md",
+      "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/deploy.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "b2c3d4e5f6a1...",
       "files": ["deploy.md"]
