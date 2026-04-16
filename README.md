@@ -1,10 +1,10 @@
 # Toolbox
 
-Portable, versioned component management for AI coding agents.
+Portable, versioned, project-local component management for AI coding agents.
 
-**The problem:** Agent components — skills, commands, and other reusable instructions — live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`). When agents run on different machines, CI environments, or cloud workers, those paths don't exist. Your carefully crafted instructions break.
+**The problem:** Agent components — skills, commands, and other reusable instructions — often live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`) or agent-specific project paths. If files are not in the exact place a given agent expects, discovery fails.
 
-**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox teaches agents how to fetch, cache, and update them. Works everywhere, no installation required.
+**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into agent-specific, project-local paths (for example `.claude/` and `.opencode/`) so discovery works. No global installation required.
 
 **Light token footprint:** The boot file section adds ~300-400 tokens to your agent's context — comparable to a few lines of project instructions. The full toolbox spec is only loaded during first-run bootstrap or updates, never on every session.
 
@@ -24,6 +24,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
 - **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
 - **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
+- **Agent Paths:** Mirror cached components into agent-local paths (for example `.claude/...` and `.opencode/...`) so each agent can discover files where it expects them.
 
 ### Skills
 
@@ -49,6 +50,8 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 
 Add `.toolbox/` to your `.gitignore`. Done.
 
+Toolbox-managed components are always project-local. Do not install or sync them into global directories like `~/.claude` or `~/.config/opencode`.
+
 When an agent reads your boot file, it fetches the toolbox skill, learns how to resolve component URLs, and caches everything locally in `.toolbox/`.
 
 ## How It Works
@@ -56,10 +59,32 @@ When an agent reads your boot file, it fetches the toolbox skill, learns how to 
 1. Agent reads the boot file, finds the `## Toolbox` section
 2. On first run, fetches each component into `.toolbox/`
 3. Creates `.toolbox/toolbox.json` manifest with content hashes for change detection
-4. On subsequent runs, uses the cached copies instantly
-5. When you ask "check for updates", it compares remote content against stored hashes and reports what changed
+4. Projects cached components into agent-specific project paths (for example `.claude/` and `.opencode/`)
+5. On subsequent runs, uses cached/projected copies instantly
+6. When you ask "check for updates", it compares remote content against stored hashes and reports what changed
 
 Components are never auto-updated. You decide when to pull new versions.
+
+## Agent Projection (Project-Local)
+
+Toolbox uses a cache-and-project model:
+
+- `.toolbox/` is canonical and drives hashing/update detection.
+- Agent-specific locations are projections for compatibility with each agent's discovery rules.
+- Projection targets must live under the repository root.
+- Never write Toolbox-managed components to home-directory/global locations.
+
+Default projection layout under each agent root:
+
+```
+skills/{name}/SKILL.md
+commands/{name}.md
+rules/{name}.md
+modes/{name}.md
+agents/{name}.md
+```
+
+Projection should use symlinks when available, with copy as fallback. Manifest entries should track managed projected files so Toolbox can safely refresh/remove only files it created.
 
 ## Component Types
 
