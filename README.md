@@ -2,6 +2,25 @@
 
 Portable, versioned, project-local component management for AI coding agents.
 
+## Usage
+
+1. Tell your agent to use Toolbox: 
+```txt
+Please use [Toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md) to manage skills and components for this directory.
+```
+
+2. Tell your agent to add new tools (skills, commands, or rules)
+```txt
+Please add <link to SKILL.md> to my toolbox.
+```
+
+3. Get the latest version of tools and install them in the right place. 
+```txt
+Please update my toolbox.
+```
+
+## Introduction
+
 **The problem:** Agent components — skills, commands, and other reusable instructions — often live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`) or agent-specific project paths. If files are not in the exact place a given agent expects, discovery fails.
 
 **The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into agent-specific, project-local paths (for example `.claude/` and `.opencode/`) so discovery works. No global installation required.

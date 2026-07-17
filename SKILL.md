@@ -9,7 +9,13 @@ Resolve, cache, project, and update component dependencies declared in a project
 
 ## When This Skill Applies
 
-When you land in a project and the boot file contains a `## Toolbox` section with a link to this skill (toolbox), follow the procedure below to ensure all declared components are available locally before doing any work.
+Respond to these common short prompts (or close variations):
+
+- "Please use [Toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md) to manage skills and components for this directory." → Bootstrap or load components as described in §1–§6.
+- "Please add <link to SKILL.md> to my toolbox." → Add the link to the appropriate subsection in the project's `## Toolbox` section (in AGENTS.md or equivalent), then fetch and integrate the new component.
+- "Please update my toolbox." → Check for updates on declared components and apply them (§4–§5).
+
+This skill also applies when you land in a project whose boot file contains a `## Toolbox` section that links to this SKILL.md. In that case, follow the full procedure to make declared components available.
 
 ## Core Model: Cache + Projection
 
@@ -141,14 +147,26 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - Both `https://` and `file://` URLs are supported.
 - Component names must be unique within their type. If duplicates are found, warn the user and use the last declaration.
 
-## Procedure
+## Procedures for Common Instructions
 
-### 1. Check for Cached Components
+### "Please use [Toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md) to manage skills and components for this directory"
 
-Look for `.toolbox/toolbox.json` in the project root.
+1. Locate the project's boot file (AGENTS.md, CLAUDE.md, or equivalent) and ensure it has a `## Toolbox` section that includes a link to this skill.
+2. If `.toolbox/toolbox.json` does not exist, bootstrap the declared components (see §2).
+3. If it exists, load the cached components and ensure they are projected into the appropriate agent directories (see §6).
+4. Proceed with normal work using the projected components.
 
-- **If it exists**: components have been fetched before. Read cached components, then ensure projections exist for the active/known local agent roots (see §6). Check for updates only when the user asks (see §4).
-- **If it doesn't exist**: bootstrap (see §2).
+### "Please add <link to SKILL.md> to my toolbox"
+
+1. Determine the component type from context or the link (Skills, Commands, Rules, Modes, or Agents).
+2. Locate the project's boot file and find (or create) the `## Toolbox` section with the matching `### <Type>` subsection.
+3. Add the link in the correct format (e.g. `- [name](url)`) if it is not already present.
+4. Fetch and integrate the new component following the bootstrap steps for that type.
+5. Update `.toolbox/toolbox.json` and re-project as needed.
+
+### "Please update my toolbox"
+
+Follow the Check for Updates and Update Components procedures below.
 
 ### 2. Bootstrap (First Run)
 

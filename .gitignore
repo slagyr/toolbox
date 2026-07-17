@@ -1,2 +1,4 @@
-.toolbox/
 .DS_Store
+.idea
+.serena
+.toolbox/
