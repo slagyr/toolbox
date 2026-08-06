@@ -75,6 +75,22 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 
 Add `.toolbox/` to your `.gitignore`. Done.
 
+## Shared + Personal (Includes)
+
+The boot file declares what the whole team uses. Two mechanisms layer on top of it:
+
+- **Includes:** a `### Includes` subsection under `## Toolbox` links other declaration files — a file elsewhere in the project, or a published `https://` baseline your org shares across projects. Included files use the same subsection format and can include further (shallow, cycle-safe).
+
+  ```markdown
+  ### Includes
+
+  - [org-baseline](https://raw.githubusercontent.com/tonotop/agent-lib/main/toolbox-baseline.md)
+  ```
+
+- **`TOOLBOX.local.md`:** drop this file next to the boot file and it is read automatically — no include line, no edit to the shared file. This is how an individual (or an individual agent in a shared repo) adds or overrides components. Gitignore it when it's personal; commit it when each user owns their own directory.
+
+Merging is a union. On a name conflict the file nearest the user wins — `TOOLBOX.local.md` over the boot file, the boot file over includes — so a local file can pin a different version of a shared component. Every override is reported, never silent, and the manifest records which file declared each component.
+
 Toolbox-managed components are always project-local. Do not install or sync them into global directories like `~/.claude` or `~/.config/opencode`.
 
 When an agent reads your boot file, it fetches the toolbox skill, learns how to resolve component URLs, and caches everything locally in `.toolbox/`.

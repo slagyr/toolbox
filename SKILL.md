@@ -2,7 +2,8 @@
 name: toolbox
 description: >-
   Manages component dependencies (skills, commands, rules, modes, agents) for a
-  project. Parses component URLs from the project's boot file, fetches them into
+  project. Parses component URLs from the project's boot file — plus included
+  declaration files and TOOLBOX.local.md — fetches them into
   a local .toolbox/ cache, projects them into agent-specific project-local paths
   (.claude/, .grok/, .cursor/, .opencode/), remembers supported agents in the
   manifest, tracks freshness, and updates on demand — never overwriting local
@@ -218,7 +219,47 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - The **link text** is the component name.
 - The **URL** points to the component's entry point.
 - Both `https://` and `file://` URLs are supported.
-- Component names must be unique within their type. If duplicates are found, warn the user and use the last declaration.
+- Component names must be unique within their type **within one file** (if duplicated, warn and use the last declaration). Across files, conflicts are resolved by precedence (§Composition).
+
+## Composition: Includes and the Local File
+
+A project's declarations can span multiple files. This lets a shared boot file declare the components everyone uses while each individual adds — or overrides — their own, without editing the shared file.
+
+### Declaration files
+
+The **declaration set** is assembled from, in increasing precedence:
+
+1. Files linked from `### Includes` subsections (below), in listed order — e.g. a published org-wide baseline.
+2. The boot file's own `## Toolbox` section (shared, committed).
+3. `TOOLBOX.local.md` next to the boot file — the **well-known local file**, read automatically whenever it exists; no include line needed. This is how an individual customizes a shared project.
+
+An included file uses the same format: the `### Skills` / `### Commands` / `### Rules` / `### Modes` / `### Agents` subsections, with or without a surrounding `## Toolbox` header. Included files may carry their own `### Includes`.
+
+```markdown
+### Includes
+
+- [org-baseline](https://raw.githubusercontent.com/tonotop/agent-lib/main/toolbox-baseline.md)
+- [team-extras](./tools/team-toolbox.md)
+```
+
+### Resolution rules
+
+- Include URLs resolve exactly like component URLs: relative `file://` paths against the **including** file's directory; `https://` fetched fresh at bootstrap/update time.
+- A `file://` include may live anywhere inside the project, never above it (same rule as component sources).
+- Includes are recursive to a depth of **4**, with cycle detection by resolved URL/path — a file already in the include chain is skipped with a warning.
+- Every declaration file and its content hash is recorded in the manifest (`declaration_files`, §3), so updates can tell when the declaration set itself changed.
+
+### Merge semantics
+
+- The set is the **union** of all declarations.
+- On a name conflict within a type, **nearest to the user wins**: `TOOLBOX.local.md` > boot file > includes (a later include beats an earlier one; a deeper include loses to its includer). This lets an individual not only add tools but pin a different version of a shared one.
+- Every override is **reported**, never silent: `tdd: TOOLBOX.local.md overrides AGENTS.md`.
+- Each component's manifest entry records `declared_in` — the file whose declaration won.
+
+### Safety
+
+- If a declaration file fails to load (fetch failure, missing local path), warn, continue with the files that did load, and **skip removal-cleanup entirely for that run** — a component must never be swept because the file declaring it was temporarily unreachable.
+- Declaration files are read only at bootstrap and update, like everything else. The per-session token footprint does not grow with includes.
 
 ## Procedures for Common Instructions
 
@@ -246,7 +287,7 @@ Follow the Check for Updates and Update Components procedures below.
 When `.toolbox/toolbox.json` is missing:
 
 1. Create the `.toolbox/` directory in the project root.
-2. Parse the `## Toolbox` section of the boot file for component subsections (`### Skills`, `### Commands`, `### Rules`, `### Modes`, `### Agents`). Extract each `[name](url)` pair.
+2. Assemble the **declaration set** (§Composition): parse the boot file's `## Toolbox` section, resolve and parse every `### Includes` file (recursively, depth ≤ 4, cycles skipped), and read `TOOLBOX.local.md` if present. Extract each `[name](url)` pair from the component subsections (`### Skills`, `### Commands`, `### Rules`, `### Modes`, `### Agents`), merging by precedence and reporting overrides.
 3. For each declared skill (including toolbox itself — use the already-fetched copy rather than re-fetching):
    a. Fetch `SKILL.md` from the skill's URL.
    b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
@@ -262,8 +303,8 @@ When `.toolbox/toolbox.json` is missing:
    a. Create needed directories.
    b. Prefer copy (symlink allowed when reliable; fallback to copy).
    c. If a target file already exists, apply the Prime Directive: replace it only when its content is byte-identical to the cached file being projected (no manifest exists yet at bootstrap, so compare content directly). Otherwise it is protected — leave it, warn, and report it as a local modification (§5.1).
-7. Write `.toolbox/toolbox.json` with component entries and `supported_agents` (see §3).
-8. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it.
+7. Write `.toolbox/toolbox.json` with component entries, `declaration_files`, and `supported_agents` (see §3).
+8. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it. If a `TOOLBOX.local.md` exists and is personal (the common case), suggest gitignoring it too — but in repos where each user or agent owns their own directory (e.g. per-agent homes), committing it is legitimate; don't force it.
 
 ### 3. The Manifest — `.toolbox/toolbox.json`
 
@@ -271,11 +312,17 @@ The manifest tracks cached components, their source URLs, fetched files, content
 
 ```json
 {
+  "declaration_files": {
+    "AGENTS.md": "9f8e7d6c5b4a...",
+    "TOOLBOX.local.md": "8e7d6c5b4a9f...",
+    "https://raw.githubusercontent.com/tonotop/agent-lib/main/toolbox-baseline.md": "7d6c5b4a9f8e..."
+  },
   "skills": {
     "tdd": {
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "f6e5d4c3b2a1...",
+      "declared_in": "AGENTS.md",
       "files": {
         "SKILL.md": "1a2b3c4d5e6f...",
         "references/details.md": "6f5e4d3c2b1a..."
@@ -287,6 +334,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "d4e5f6a1b2c3...",
+      "declared_in": "TOOLBOX.local.md",
       "files": {"test.md": "2b3c4d5e6f1a..."}
     }
   },
@@ -328,6 +376,8 @@ The manifest tracks cached components, their source URLs, fetched files, content
 | `modes` | Map of mode name → mode entry. |
 | `agents` | Map of agent name → agent entry (persona components, not "supported agents"). |
 | `supported_agents` | Array of agent **names** (`claude-code`, `opencode`, `grok`, `cursor`). Roots and layouts are defined by this skill, not stored here. |
+| `declaration_files` | Map of declaration file (project-relative path or URL) → SHA-256 of its content when the declaration set was last assembled. Detects changes to the set itself. |
+| `{type}.{name}.declared_in` | The declaration file whose entry won for this component (§Composition merge semantics). Lets status reports group by source and removal-cleanup check the right files. |
 | `{type}.{name}.url` | The URL from which the component was fetched. |
 | `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
 | `{type}.{name}.sha256` | Component-level hash: SHA-256 of the lines `{path}:{file-hash}` sorted by path, joined with newlines. Used to detect remote changes cheaply. |
@@ -350,6 +400,8 @@ If any component's `files` is a **list** (older Toolbox) rather than a map:
 1. Hash each listed file as it exists in `.toolbox/` cache and rebuild `files` as a path → hash map. No network required.
 2. Caveat: if the cache itself was hand-edited before this migration, those edits are baked in as the recorded baseline. That is the safe direction — the edit is treated as canonical rather than silently reverted on the next update.
 
+If the manifest lacks `declaration_files` (pre-composition Toolbox): assemble the declaration set (§Composition), record the file hashes, and stamp each component's `declared_in` from the merge. Components in the manifest but in no declaration file are reported — not removed — on this first migration run.
+
 ### 4. Check for Updates
 
 Toolbox detects updates by comparing content, not by time. Each component's `sha256` in the manifest is the hash of all its files at fetch time.
@@ -358,7 +410,7 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
 
 **When the user asks** (e.g., "check for updates", "are my skills up to date?"):
 
-1. For each component in the manifest, fetch all files from the URL.
+1. Re-assemble the declaration set (§Composition) — re-read local declaration files, re-fetch `https://` includes — so the check covers what is *currently* declared, and note any declaration files whose hash changed. Then for each component in the set, fetch all files from the URL.
 2. Compute the component hash from the fetched files (same method as bootstrap) and compare to the stored `sha256` — this detects **remote changes**.
 3. Hash the component's files on disk — in cache *and* in each supported projection root — against the manifest's `files` map. Any mismatch is a **local modification**.
 4. **`file://` sources — establish freshness honestly.** An `https://` fetch is authoritative: the response *is* the latest, so "up to date" is a claim Toolbox can vouch for. A `file://` URL pointing into a checkout is itself a cache of something upstream — comparing against it only proves the cache matches a directory on this disk. **Never report a `file://` component as "up to date"; reserve that phrase for sources Toolbox actually verified.** For a `file://` source, establish what can be known:
@@ -387,13 +439,13 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
 
 When the user asks to update (e.g., "update skills", "refresh components"):
 
-1. Re-parse the boot file for current component declarations. This catches added or removed components.
+1. Re-assemble the declaration set (§Composition): boot file, includes, and `TOOLBOX.local.md`. This catches added, removed, and overridden components. Update `declaration_files` in the manifest, and set each component's `declared_in` per the merge.
 2. For each declared component:
    a. Re-fetch all files from the URL.
    b. For skills, re-discover and fetch reference files.
    c. **Prime Directive check:** hash each cached file against the manifest's `files` map. Clean files are overwritten with the fetched content. Modified files go through §5.1 instead — do not overwrite them here.
    d. Update `fetched_at`, `sha256`, and the `files` map in the manifest for every file actually written.
-3. Remove any cached components that are no longer declared in the boot file — but a no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so. Cleanup looks **only** inside `.toolbox/{skills,commands,rules,modes,agents}/`; everything else under `.toolbox/` is bookkeeping and is never swept (Prime Directive, bookkeeping invariant). While here, prune backups older than 30 days and report what was removed.
+3. Remove any cached components that are no longer declared in **any** declaration file — but only when every declaration file loaded successfully this run; if any failed to load, skip removal entirely (§Composition, Safety). A no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so. Cleanup looks **only** inside `.toolbox/{skills,commands,rules,modes,agents}/`; everything else under `.toolbox/` is bookkeeping and is never swept (Prime Directive, bookkeeping invariant). While here, prune backups older than 30 days and report what was removed.
 4. Refresh `supported_agents` (target set algorithm).
 5. Re-sync projections for **every** name in `supported_agents`:
    a. **Prime Directive check first:** hash each existing projected file against the manifest. Clean or missing → copy from cache. Modified → §5.1; leave the file in place.
@@ -521,6 +573,9 @@ Reference discovery applies only to skills. All other component types are single
 - **Fetch failure (single component):** If a component's URL returns an error (404, timeout, network unavailable), warn the user and skip that component. Do not block the entire bootstrap or update process.
 - **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
 - **No `## Toolbox` section:** If the boot file has no `## Toolbox` section, toolbox does not apply. Do nothing.
+- **Include fails to load:** Warn, continue with the declaration files that did load, and skip removal-cleanup for the whole run — never sweep components whose declaring file was unreachable (§Composition, Safety).
+- **Include cycle or depth > 4:** Skip the offending include with a warning; process the rest.
+- **Include path escapes the project:** Reject and warn, same as component sources.
 - **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip. When a *relative* file URL misses, say which checkout is absent and that the project's setup is expected to provide it — a missing sibling checkout is the likely cause, not a typo.
 - **`file://` path escapes the project:** If a relative file URL normalizes to a path above the project root, reject and warn. Never read component sources from outside the project.
 - **Unknown agent name:** Warn and skip; do not invent a root.
