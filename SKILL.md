@@ -223,12 +223,11 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 
 ## Composition: `*.TOOLBOX.md` Files
 
-A project's declarations can span multiple files. The boot file's `## Toolbox` section declares the shared set everyone uses; any **`TOOLBOX.md` or `*.TOOLBOX.md`** file in the project adds to it. An individual (or an individual agent in a shared repo) drops `micah.TOOLBOX.md` — or `agents/ratchet/ratchet.TOOLBOX.md` — and those tools are declared. No edit to the shared boot file, no include syntax, no registration anywhere.
+A project's declarations can span multiple files. The boot file's `## Toolbox` section declares the shared set everyone uses; any **`TOOLBOX.md` or `*.TOOLBOX.md`** file at the **project root** adds to it. An individual (or an individual agent in a shared repo) drops `micah.TOOLBOX.md` next to the boot file and those tools are declared. No edit to the shared boot file, no include syntax, no registration anywhere.
 
 ### Discovery
 
-- When assembling the declaration set (bootstrap and update), glob the project for `TOOLBOX.md` and `*.TOOLBOX.md`, recursively from the project root.
-- Skip `.toolbox/` and dot-directories (`.git/`, agent projection roots like `.claude/`).
+- When assembling the declaration set (bootstrap and update), glob the **project root only** — not subdirectories — for `TOOLBOX.md` and `*.TOOLBOX.md`.
 - **Report every discovered file** each time the set is assembled. Discovery must never be silent — an unnoticed declaration file is an unnoticed source of tools.
 
 ### Format
@@ -238,8 +237,8 @@ A `*.TOOLBOX.md` file uses the same subsections as the boot file — `### Skills
 ### Merge semantics
 
 - The set is the **union** of all declarations.
-- On a name conflict within a type, **most specific wins**: any `*.TOOLBOX.md` beats the boot file (personal beats shared); among discovered files, a deeper path beats a shallower one; at equal depth, the lexicographically later path wins. This lets an individual not only add tools but pin a different version of a shared one.
-- Every override is **reported**, never silent: `tdd: agents/ratchet/ratchet.TOOLBOX.md overrides AGENTS.md`.
+- On a name conflict within a type, any `*.TOOLBOX.md` beats the boot file (personal beats shared); among discovered files, the lexicographically later filename wins. This lets an individual not only add tools but pin a different version of a shared one.
+- Every override is **reported**, never silent: `tdd: micah.TOOLBOX.md overrides AGENTS.md`.
 - Each component's manifest entry records `declared_in` — the file whose declaration won — and every declaration file's content hash is recorded in `declaration_files` (§3) so updates can tell when the set itself changed.
 
 ### Safety
@@ -302,7 +301,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
   "declaration_files": {
     "AGENTS.md": "9f8e7d6c5b4a...",
     "micah.TOOLBOX.md": "8e7d6c5b4a9f...",
-    "agents/ratchet/ratchet.TOOLBOX.md": "7d6c5b4a9f8e..."
+    "ratchet.TOOLBOX.md": "7d6c5b4a9f8e..."
   },
   "skills": {
     "tdd": {
