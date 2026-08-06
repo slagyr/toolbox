@@ -406,7 +406,7 @@ To pin a specific version, use a commit SHA instead of a branch name:
 https://raw.githubusercontent.com/{owner}/{repo}/{sha}/path/to/file.md
 ```
 
-**Private repos:** `raw.githubusercontent.com` does not serve files from private repositories without authentication. For private components, use `file://` URLs or a URL that includes an access token.
+**Private repos:** `raw.githubusercontent.com` does not serve files from private repositories without authentication — an anonymous fetch returns 404, not 401. Do not put an access token in a boot file that is committed. For private components, keep the source checked out inside the project and declare it with a **relative `file://` URL** (below).
 
 ### `file://`
 
@@ -415,12 +415,25 @@ Copy from the local filesystem. Useful for:
 - Private components that won't be published
 - Migration from filesystem-based references
 
-Example:
+**Absolute** — resolves exactly as written:
 ```markdown
 - [braids](file:///Users/micah/Projects/braids/braids/SKILL.md)
 ```
 
-**Note:** `file://` URLs are not portable across machines. Use `https://` for components that need to work everywhere.
+**Relative** — a path beginning with `./` or `../` resolves against the **directory containing the boot file**:
+```markdown
+- [whoville](file://./agent-lib/skills/whoville/SKILL.md)
+```
+
+Relative file URLs are the portable form. They travel across machines and teammates because they name a location *within* the project rather than a location on one person's disk. Use them when a private component repo is checked out inside the project — the checkout must be part of the project's documented setup, or the URL will not resolve on a fresh machine.
+
+Resolution rules:
+
+1. Resolve the path against the boot file's directory, then normalize it.
+2. Reject any path that escapes the project root after normalization, and warn. A component source may sit anywhere inside the project, but never above it.
+3. Treat a missing target as a fetch failure — warn and skip (§Error Handling). Do not fall back to a stale cache silently.
+
+**Note:** Absolute `file://` URLs are not portable across machines. Prefer the relative form, or `https://` for components that need to work everywhere.
 
 ## Reference Discovery
 
@@ -445,7 +458,8 @@ Reference discovery applies only to skills. All other component types are single
 - **Fetch failure (single component):** If a component's URL returns an error (404, timeout, network unavailable), warn the user and skip that component. Do not block the entire bootstrap or update process.
 - **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
 - **No `## Toolbox` section:** If the boot file has no `## Toolbox` section, toolbox does not apply. Do nothing.
-- **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip.
+- **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip. When a *relative* file URL misses, say which checkout is absent and that the project's setup is expected to provide it — a missing sibling checkout is the likely cause, not a typo.
+- **`file://` path escapes the project:** If a relative file URL normalizes to a path above the project root, reject and warn. Never read component sources from outside the project.
 - **Unknown agent name:** Warn and skip; do not invent a root.
 - **Projection root outside repo:** Reject and warn. Never write to global/home paths.
 - **Projection conflict:** If a destination file exists and is not Toolbox-managed, do not overwrite; warn and skip that file.
@@ -457,3 +471,4 @@ Reference discovery applies only to skills. All other component types are single
 - **No component dependencies.** Toolbox treats each component as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both explicitly.
 - **Built-in agents only.** Automatic projection targets `claude-code`, `opencode`, `grok`, and `cursor`. Other products need a skill update (or remain unsupported).
 - **Same components for every supported agent.** There is no per-agent component subset in the manifest.
+- **Relative `file://` sources are only as reliable as project setup.** Toolbox does not clone them. If a declared source checkout is missing, those components are simply unavailable until the project's own setup provides it.
