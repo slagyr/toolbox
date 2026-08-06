@@ -5,7 +5,7 @@ description: >-
   project. Parses component URLs from the project's boot file — plus any
   *.TOOLBOX.md files discovered in the project — fetches them into
   a local .toolbox/ cache, projects them into agent-specific project-local paths
-  (.claude/, .grok/, .cursor/, .opencode/), remembers supported agents in the
+  (.claude/, .grok/, .cursor/, .opencode/, .codex/), remembers supported agents in the
   manifest, tracks freshness, and updates on demand — never overwriting local
   edits to managed files. Use when a project's boot file declares components
   via URL.
@@ -35,9 +35,9 @@ Toolbox has two layers:
 1. **Canonical cache (`.toolbox/`)** for fetches, hashes, and update detection.
 2. **Agent projection roots** for compatibility with agent-specific discovery paths.
 
-Projection roots are always inside the repository (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`).
+Projection roots are always inside the repository (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`, `.codex/`).
 
-Never install or sync Toolbox-managed components to global locations such as `~/.claude`, `~/.grok`, `~/.cursor`, or `~/.config/opencode`.
+Never install or sync Toolbox-managed components to global locations such as `~/.claude`, `~/.grok`, `~/.cursor`, `~/.codex`, or `~/.config/opencode`.
 
 ## The Prime Directive: Never Overwrite Bytes You Didn't Write
 
@@ -67,6 +67,7 @@ The skill maps each **agent name** to a project-local root and relative layout. 
 | `opencode` | `.opencode/` | Default layout |
 | `grok` | `.grok/` | Default layout |
 | `cursor` | `.cursor/` | Default layout |
+| `codex` | `.codex/` | Default layout |
 
 **Default relative layout** (all known agents unless noted):
 
@@ -80,11 +81,13 @@ agents/{name}.md
 
 Unknown agent names: warn and skip (do not invent roots).
 
+Note: `codex` has no native project-local auto-discovery — Codex reads the boot file and follows its `## Toolbox` loading instructions directly. The `.codex/` projection is an organized, browsable mirror for teams that want one, not a discovery requirement.
+
 ### Detecting the current agent (session only — do not persist)
 
 Best-effort, ordered:
 
-1. Explicit product/runtime signals when available (Cursor, Grok Build, Claude Code, OpenCode).
+1. Explicit product/runtime signals when available (Cursor, Grok Build, Claude Code, OpenCode, Codex).
 2. Otherwise leave detection unknown; still project every name already in `supported_agents` and any known roots that exist on disk.
 
 Detection is used only to **enroll** a newly seen agent and to **prefer** that agent's projection when loading. Do **not** write an `active_agent` field into the manifest.
@@ -124,7 +127,7 @@ There is **no** `projections` or `managed_files` list in the manifest. A path un
 On update or unenroll:
 
 - May add/overwrite/remove only managed paths for currently declared components (or components just removed from the boot file).
-- Never delete or overwrite unrelated files under `.claude/`, `.grok/`, `.cursor/`, or `.opencode/`.
+- Never delete or overwrite unrelated files under `.claude/`, `.grok/`, `.cursor/`, `.opencode/`, or `.codex/`.
 
 ## Component Types
 
@@ -191,7 +194,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
 - **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
 - **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
-- **Agent Paths:** Project cached components into every **supported** agent root (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`) so each agent can discover them where it expects. The list of supported agent names is stored in `.toolbox/toolbox.json`.
+- **Agent Paths:** Project cached components into every **supported** agent root (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`, `.codex/`) so each agent can discover them where it expects. The list of supported agent names is stored in `.toolbox/toolbox.json`.
 
 ### Skills
 
@@ -361,7 +364,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
 | `rules` | Map of rule name → rule entry. |
 | `modes` | Map of mode name → mode entry. |
 | `agents` | Map of agent name → agent entry (persona components, not "supported agents"). |
-| `supported_agents` | Array of agent **names** (`claude-code`, `opencode`, `grok`, `cursor`). Roots and layouts are defined by this skill, not stored here. |
+| `supported_agents` | Array of agent **names** (`claude-code`, `opencode`, `grok`, `cursor`, `codex`). Roots and layouts are defined by this skill, not stored here. |
 | `declaration_files` | Map of declaration file (project-relative path or URL) → SHA-256 of its content when the declaration set was last assembled. Detects changes to the set itself. |
 | `{type}.{name}.declared_in` | The declaration file whose entry won for this component (§Composition merge semantics). Lets status reports group by source and removal-cleanup check the right files. |
 | `{type}.{name}.url` | The URL from which the component was fetched. |
@@ -480,7 +483,7 @@ Every drifted file ends each update in exactly one of these states: **kept** (up
 
 **Enroll** (add to `supported_agents` if missing):
 
-1. Resolve the agent name (`claude-code`, `opencode`, `grok`, `cursor`).
+1. Resolve the agent name (`claude-code`, `opencode`, `grok`, `cursor`, `codex`).
 2. Append to `supported_agents`, write manifest.
 3. Project all declared components into that agent's root from cache.
 
@@ -573,6 +576,6 @@ Reference discovery applies only to skills. All other component types are single
 ## Limitations
 
 - **No component dependencies.** Toolbox treats each component as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both explicitly.
-- **Built-in agents only.** Automatic projection targets `claude-code`, `opencode`, `grok`, and `cursor`. Other products need a skill update (or remain unsupported).
+- **Built-in agents only.** Automatic projection targets `claude-code`, `opencode`, `grok`, `cursor`, and `codex`. Other products need a skill update (or remain unsupported).
 - **Same components for every supported agent.** There is no per-agent component subset in the manifest.
 - **Relative `file://` sources are only as reliable as project setup.** Toolbox does not clone them. If a declared source checkout is missing, those components are simply unavailable until the project's own setup provides it.

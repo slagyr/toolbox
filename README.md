@@ -29,7 +29,7 @@ Also support Cursor for this project.
 
 **The problem:** Agent components — skills, commands, and other reusable instructions — often live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.cursor/skills/`) or agent-specific project paths. If files are not in the exact place a given agent expects, discovery fails.
 
-**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into **every supported agent**'s project-local tree (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`). The manifest remembers **which agent names** this project supports (`supported_agents`); the skill knows the root and layout for each name. No global installation required.
+**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into **every supported agent**'s project-local tree (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`, `.codex/`). The manifest remembers **which agent names** this project supports (`supported_agents`); the skill knows the root and layout for each name. No global installation required.
 
 **Light token footprint:** The boot file section adds ~300-400 tokens to your agent's context — comparable to a few lines of project instructions. The full toolbox spec is only loaded during first-run bootstrap or updates, never on every session.
 
@@ -49,7 +49,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
 - **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
 - **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
-- **Agent Paths:** Project cached components into every supported agent root (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`) so each product can discover files where it expects them.
+- **Agent Paths:** Project cached components into every supported agent root (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`, `.codex/`) so each product can discover files where it expects them.
 
 ### Skills
 
@@ -122,6 +122,7 @@ Toolbox uses a cache-and-project model:
 | `opencode` | `.opencode/` |
 | `grok` | `.grok/` |
 | `cursor` | `.cursor/` |
+| `codex` | `.codex/` |
 
 Default layout under each root:
 
