@@ -206,8 +206,8 @@ Absolute `file://` URLs aren't portable across machines — switch to `https://`
 `raw.githubusercontent.com` returns 404 for private repositories, and an access token must never be committed in a boot file. Instead, check the private component repo out **inside** your project and declare it with a relative `file://` URL — a path starting with `./` or `../`, resolved against the boot file's directory:
 
 ```markdown
-- [whoville](file://./agent-lib/skills/whoville/SKILL.md)
-- [pull](file://./agent-lib/commands/pull.md)
+- [tdd](file://./private-lib/skills/tdd/SKILL.md)
+- [deploy](file://./private-lib/commands/deploy.md)
 ```
 
 This form is portable: it names a location inside the project, so it resolves the same way for every teammate. Toolbox does not clone the source — make that checkout part of your project's documented setup, or the URLs won't resolve on a fresh machine. Paths that normalize above the project root are rejected.

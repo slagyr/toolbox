@@ -422,7 +422,7 @@ Copy from the local filesystem. Useful for:
 
 **Relative** — a path beginning with `./` or `../` resolves against the **directory containing the boot file**:
 ```markdown
-- [whoville](file://./agent-lib/skills/whoville/SKILL.md)
+- [tdd](file://./private-lib/skills/tdd/SKILL.md)
 ```
 
 Relative file URLs are the portable form. They travel across machines and teammates because they name a location *within* the project rather than a location on one person's disk. Use them when a private component repo is checked out inside the project — the checkout must be part of the project's documented setup, or the URL will not resolve on a fresh machine.
