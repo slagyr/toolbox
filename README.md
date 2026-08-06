@@ -19,11 +19,17 @@ Please add <link to SKILL.md> to my toolbox.
 Please update my toolbox.
 ```
 
+4. (Optional) Enroll another agent so its discovery tree stays in sync:
+```txt
+Also support Grok for this project.
+Also support Cursor for this project.
+```
+
 ## Introduction
 
-**The problem:** Agent components — skills, commands, and other reusable instructions — often live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.agents/skills/`) or agent-specific project paths. If files are not in the exact place a given agent expects, discovery fails.
+**The problem:** Agent components — skills, commands, and other reusable instructions — often live at machine-specific paths (`~/.config/opencode/skills/`, `~/.claude/skills/`, `~/.cursor/skills/`) or agent-specific project paths. If files are not in the exact place a given agent expects, discovery fails.
 
-**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into agent-specific, project-local paths (for example `.claude/` and `.opencode/`) so discovery works. No global installation required.
+**The solution:** Declare components by URL in your project's boot file (`AGENTS.md`, `CLAUDE.md`, or whatever your agent reads on startup). Toolbox fetches and caches them in `.toolbox/` (source of truth), then projects them into **every supported agent**'s project-local tree (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`). The manifest remembers **which agent names** this project supports (`supported_agents`); the skill knows the root and layout for each name. No global installation required.
 
 **Light token footprint:** The boot file section adds ~300-400 tokens to your agent's context — comparable to a few lines of project instructions. The full toolbox spec is only loaded during first-run bootstrap or updates, never on every session.
 
@@ -43,7 +49,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
 - **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
 - **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
-- **Agent Paths:** Mirror cached components into agent-local paths (for example `.claude/...` and `.opencode/...`) so each agent can discover files where it expects them.
+- **Agent Paths:** Project cached components into every supported agent root (`.claude/`, `.grok/`, `.cursor/`, `.opencode/`) so each product can discover files where it expects them.
 
 ### Skills
 
@@ -77,9 +83,9 @@ When an agent reads your boot file, it fetches the toolbox skill, learns how to 
 
 1. Agent reads the boot file, finds the `## Toolbox` section
 2. On first run, fetches each component into `.toolbox/`
-3. Creates `.toolbox/toolbox.json` manifest with content hashes for change detection
-4. Projects cached components into agent-specific project paths (for example `.claude/` and `.opencode/`)
-5. On subsequent runs, uses cached/projected copies instantly
+3. Creates `.toolbox/toolbox.json` with content hashes and a `supported_agents` name list
+4. Projects cached components into **each** supported agent root (create roots as needed)
+5. On later sessions, enrolls newly detected agents, keeps all supported roots in sync from cache
 6. When you ask "check for updates", it compares remote content against stored hashes and reports what changed
 
 Components are never auto-updated. You decide when to pull new versions.
@@ -89,11 +95,20 @@ Components are never auto-updated. You decide when to pull new versions.
 Toolbox uses a cache-and-project model:
 
 - `.toolbox/` is canonical and drives hashing/update detection.
-- Agent-specific locations are projections for compatibility with each agent's discovery rules.
+- Agent-specific locations are projections for each product's discovery rules.
 - Projection targets must live under the repository root.
 - Never write Toolbox-managed components to home-directory/global locations.
 
-Default projection layout under each agent root:
+### Built-in agent names
+
+| Name | Project root |
+|------|----------------|
+| `claude-code` | `.claude/` |
+| `opencode` | `.opencode/` |
+| `grok` | `.grok/` |
+| `cursor` | `.cursor/` |
+
+Default layout under each root:
 
 ```
 skills/{name}/SKILL.md
@@ -103,7 +118,21 @@ modes/{name}.md
 agents/{name}.md
 ```
 
-Projection should use symlinks when available, with copy as fallback. Manifest entries should track managed projected files so Toolbox can safely refresh/remove only files it created.
+### Supported agents
+
+The manifest stores only:
+
+```json
+"supported_agents": ["claude-code", "grok", "cursor"]
+```
+
+The skill maps each name to a root and layout. There is no `active_agent` field and no `projections` map — roots and file ownership follow the skill; projected files on disk are the projection state.
+
+**Enrollment:** detect the current product when possible, notice existing agent roots, or honor an explicit "support Cursor/Grok" request. Once enrolled, every update re-projects that agent.
+
+**Loading this session:** prefer the detected agent's tree when known; fall back to `.toolbox/`.
+
+Prefer **copy** into projection roots (symlink allowed when reliable). Only overwrite or remove paths that match declared component projections (managed by convention).
 
 ## Component Types
 

@@ -1,6 +1,12 @@
 ---
 name: toolbox
-description: Manages component dependencies (skills, commands, rules, modes, agents) for a project. Parses component URLs from the project's boot file, fetches them into a local .toolbox/ cache, projects them into agent-specific project-local paths (for example .claude/ and .opencode/), tracks freshness, and updates on demand. Use this skill when a project's boot file declares components via URL.
+description: >-
+  Manages component dependencies (skills, commands, rules, modes, agents) for a
+  project. Parses component URLs from the project's boot file, fetches them into
+  a local .toolbox/ cache, projects them into agent-specific project-local paths
+  (.claude/, .grok/, .cursor/, .opencode/), remembers supported agents in the
+  manifest, tracks freshness, and updates on demand. Use when a project's boot
+  file declares components via URL.
 ---
 
 # Toolbox — Component Management
@@ -14,6 +20,9 @@ Respond to these common short prompts (or close variations):
 - "Please use [Toolbox](https://raw.githubusercontent.com/slagyr/toolbox/main/SKILL.md) to manage skills and components for this directory." → Bootstrap or load components as described in §1–§6.
 - "Please add <link to SKILL.md> to my toolbox." → Add the link to the appropriate subsection in the project's `## Toolbox` section (in AGENTS.md or equivalent), then fetch and integrate the new component.
 - "Please update my toolbox." → Check for updates on declared components and apply them (§4–§5).
+- "Also support Grok / Cursor / Claude / OpenCode for this project." → Enroll that agent name in `supported_agents` and project into its root (see "Known Agents", §7).
+- "Which agents does toolbox support here?" → Report `supported_agents` from the manifest.
+- "Stop projecting for <agent>." → Unenroll that name and remove only managed projection paths for that agent (§7).
 
 This skill also applies when you land in a project whose boot file contains a `## Toolbox` section that links to this SKILL.md. In that case, follow the full procedure to make declared components available.
 
@@ -24,18 +33,22 @@ Toolbox has two layers:
 1. **Canonical cache (`.toolbox/`)** for fetches, hashes, and update detection.
 2. **Agent projection roots** for compatibility with agent-specific discovery paths.
 
-Projection roots are always inside the repository (for example `.claude/` and `.opencode/`).
+Projection roots are always inside the repository (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`).
 
-Never install or sync Toolbox-managed components to global locations such as `~/.claude` or `~/.config/opencode`.
+Never install or sync Toolbox-managed components to global locations such as `~/.claude`, `~/.grok`, `~/.cursor`, or `~/.config/opencode`.
 
-## Agent Projection Paths (Project-Local Only)
+## Known Agents
 
-Use these known project-local roots when applicable:
+The skill maps each **agent name** to a project-local root and relative layout. The manifest stores only the names in `supported_agents` (a simple string list). Roots and paths are **not** stored in the manifest.
 
-- **OpenCode:** `.opencode/`
-- **Claude Code:** `.claude/`
+| Name | Root | Relative layout under root |
+|------|------|----------------------------|
+| `claude-code` | `.claude/` | Default layout (below) |
+| `opencode` | `.opencode/` | Default layout |
+| `grok` | `.grok/` | Default layout |
+| `cursor` | `.cursor/` | Default layout |
 
-Default relative layout under each projection root:
+**Default relative layout** (all known agents unless noted):
 
 ```
 skills/{name}/SKILL.md
@@ -45,16 +58,57 @@ modes/{name}.md
 agents/{name}.md
 ```
 
-Projection selection rules:
+Unknown agent names: warn and skip (do not invent roots).
 
-1. Always project for the active agent.
-2. Also project to other known roots that already exist in the repo.
-3. Never project outside the repo root.
-4. Prefer symlink; fallback to copy if symlinks are unavailable.
+### Detecting the current agent (session only — do not persist)
+
+Best-effort, ordered:
+
+1. Explicit product/runtime signals when available (Cursor, Grok Build, Claude Code, OpenCode).
+2. Otherwise leave detection unknown; still project every name already in `supported_agents` and any known roots that exist on disk.
+
+Detection is used only to **enroll** a newly seen agent and to **prefer** that agent's projection when loading. Do **not** write an `active_agent` field into the manifest.
+
+### Supported agents (durable)
+
+`supported_agents` in `.toolbox/toolbox.json` is a JSON array of agent names, e.g. `["claude-code", "grok", "cursor"]`.
+
+**Enrollment** (add a name if missing, then rewrite the manifest):
+
+1. Detected current agent (when known).
+2. Any known agent whose root directory already exists in the repo.
+3. Explicit user request (e.g. "also support cursor").
+
+**Unenrollment** only on explicit user request: remove the name from `supported_agents`, delete managed projected files for that agent only (§7), rewrite the manifest.
+
+### Projection target set
+
+On bootstrap, update, or repair:
+
+1. Start with `supported_agents` from the manifest (or `[]` if missing).
+2. Add the detected current agent if known.
+3. Add any known agent whose root already exists on disk.
+4. Dedupe → this is the **target set**.
+5. Write the target set back to `supported_agents` (sorted for stable diffs is fine).
+6. For **each** name in `supported_agents`, project the full declared component set into that agent's root (create the root if needed).
+
+Never project outside the repo root. Prefer **copy** into projection roots; symlink is allowed when reliable, with copy as fallback.
+
+### Managed projection paths (by convention)
+
+There is **no** `projections` or `managed_files` list in the manifest. A path under an agent root is **Toolbox-managed** only if it is exactly the projected path of a **declared** component for that agent type, e.g.:
+
+- `.grok/skills/tdd/SKILL.md` when skill `tdd` is declared (and any relative files listed for that skill under cache)
+- `.cursor/commands/work.md` when command `work` is declared
+
+On update or unenroll:
+
+- May add/overwrite/remove only managed paths for currently declared components (or components just removed from the boot file).
+- Never delete or overwrite unrelated files under `.claude/`, `.grok/`, `.cursor/`, or `.opencode/`.
 
 ## Component Types
 
-Toolbox manages different types of agent components. Each type has its own subsection under `## Toolbox` in the boot file, its own cache subdirectory, and its own entry in the manifest.
+Toolbox manages different types of agent components. Each type has its own subsection under `## Toolbox` in the boot file, its own cache subdirectory, and its own projected path under each agent root.
 
 ### Skills
 
@@ -62,7 +116,7 @@ Skills are instruction sets that teach agents how to perform specific tasks. A s
 
 - **Boot file section:** `### Skills` (under `## Toolbox`)
 - **Cache location:** `.toolbox/skills/{name}/SKILL.md`
-- **Projection location:** `{projection_root}/skills/{name}/SKILL.md`
+- **Projection location:** `{agent_root}/skills/{name}/SKILL.md`
 - **Reference discovery:** Yes — relative markdown links in `SKILL.md` are fetched automatically.
 
 ### Commands
@@ -71,7 +125,7 @@ Commands are single-file agent instructions invoked by name (e.g., `/test`, `/de
 
 - **Boot file section:** `### Commands` (under `## Toolbox`)
 - **Cache location:** `.toolbox/commands/{name}.md`
-- **Projection location:** `{projection_root}/commands/{name}.md`
+- **Projection location:** `{agent_root}/commands/{name}.md`
 - **Reference discovery:** No — commands are single files.
 
 ### Rules
@@ -80,7 +134,7 @@ Rules are behavioral constraints that modify how the agent operates (e.g., "alwa
 
 - **Boot file section:** `### Rules` (under `## Toolbox`)
 - **Cache location:** `.toolbox/rules/{name}.md`
-- **Projection location:** `{projection_root}/rules/{name}.md`
+- **Projection location:** `{agent_root}/rules/{name}.md`
 - **Reference discovery:** No — rules are single files.
 
 ### Modes
@@ -89,7 +143,7 @@ Modes are operating profiles that configure the agent's behavior for a specific 
 
 - **Boot file section:** `### Modes` (under `## Toolbox`)
 - **Cache location:** `.toolbox/modes/{name}.md`
-- **Projection location:** `{projection_root}/modes/{name}.md`
+- **Projection location:** `{agent_root}/modes/{name}.md`
 - **Reference discovery:** No — modes are single files.
 
 ### Agents
@@ -98,7 +152,7 @@ Agents are full persona definitions with system prompts and tool configurations.
 
 - **Boot file section:** `### Agents` (under `## Toolbox`)
 - **Cache location:** `.toolbox/agents/{name}.md`
-- **Projection location:** `{projection_root}/agents/{name}.md`
+- **Projection location:** `{agent_root}/agents/{name}.md`
 - **Reference discovery:** No — agents are single files.
 
 ## How Components Are Declared
@@ -117,7 +171,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 - **Rules:** Read and apply all rules from `.toolbox/rules/` at session start.
 - **Modes:** When the user requests a mode by name, read and apply `.toolbox/modes/{name}.md`.
 - **Agents:** When the user requests an agent by name, read and apply `.toolbox/agents/{name}.md`.
-- **Agent Paths:** Project cached components into agent-local paths (for example `.claude/...` and `.opencode/...`) so each agent can discover them where it expects.
+- **Agent Paths:** Project cached components into every **supported** agent root (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`) so each agent can discover them where it expects. The list of supported agent names is stored in `.toolbox/toolbox.json`.
 
 ### Skills
 
@@ -153,8 +207,8 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 
 1. Locate the project's boot file (AGENTS.md, CLAUDE.md, or equivalent) and ensure it has a `## Toolbox` section that includes a link to this skill.
 2. If `.toolbox/toolbox.json` does not exist, bootstrap the declared components (see §2).
-3. If it exists, load the cached components and ensure they are projected into the appropriate agent directories (see §6).
-4. Proceed with normal work using the projected components.
+3. If it exists, migrate the manifest if needed (§3.1), load the cached components, ensure `supported_agents` is up to date, and project into **all** supported agent roots (see §6–§7).
+4. Proceed with normal work using the projected components (prefer the detected agent's root when loading).
 
 ### "Please add <link to SKILL.md> to my toolbox"
 
@@ -162,7 +216,7 @@ SKILL.md from the URL above and follow its instructions. Once bootstrapped:
 2. Locate the project's boot file and find (or create) the `## Toolbox` section with the matching `### <Type>` subsection.
 3. Add the link in the correct format (e.g. `- [name](url)`) if it is not already present.
 4. Fetch and integrate the new component following the bootstrap steps for that type.
-5. Update `.toolbox/toolbox.json` and re-project as needed.
+5. Update `.toolbox/toolbox.json` and re-project into **all** `supported_agents`.
 
 ### "Please update my toolbox"
 
@@ -184,20 +238,17 @@ When `.toolbox/toolbox.json` is missing:
    a. Fetch the file from the URL.
    b. Write it to `.toolbox/{type}/{name}.md`.
    c. Compute the SHA-256 hash of the fetched content.
-5. Determine projection roots:
-   a. Include the active agent's known project-local root (for example `.opencode/` or `.claude/`) when identifiable.
-   b. Include other known roots only if they already exist in the repo.
-   c. Reject any root outside the repo (absolute paths, `~`, parent traversal) and warn.
-6. Project cached components from `.toolbox/` into each selected root:
+5. Build `supported_agents` (target set) per **Projection target set** above (detect + existing roots; list starts empty on first run).
+6. Project cached components from `.toolbox/` into **each** supported agent's root:
    a. Create needed directories.
-   b. Prefer symlink to cached files; if unavailable, copy files.
-   c. If a target file already exists and is not Toolbox-managed, do not overwrite it; warn and skip.
-7. Write `.toolbox/toolbox.json` with cache and projection metadata (see §3).
+   b. Prefer copy (symlink allowed when reliable; fallback to copy).
+   c. If a target file already exists and is not Toolbox-managed (by convention), do not overwrite it; warn and skip.
+7. Write `.toolbox/toolbox.json` with component entries and `supported_agents` (see §3).
 8. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it.
 
 ### 3. The Manifest — `.toolbox/toolbox.json`
 
-The manifest tracks cached components, their source URLs, fetched files, content hashes, and projection metadata. Example (hashes and timestamps are illustrative):
+The manifest tracks cached components, their source URLs, fetched files, content hashes, and which agent names this project supports. Example (hashes and timestamps are illustrative):
 
 ```json
 {
@@ -241,29 +292,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "files": ["reviewer.md"]
     }
   },
-  "projections": {
-    "opencode": {
-      "root": ".opencode",
-      "strategy": "symlink",
-      "updated_at": "2026-03-06T12:00:00Z",
-      "managed_files": [
-        "skills/tdd/SKILL.md",
-        "commands/test.md",
-        "rules/no-force-push.md",
-        "modes/architect.md",
-        "agents/reviewer.md"
-      ]
-    },
-    "claude-code": {
-      "root": ".claude",
-      "strategy": "copy",
-      "updated_at": "2026-03-06T12:00:00Z",
-      "managed_files": [
-        "skills/tdd/SKILL.md",
-        "commands/test.md"
-      ]
-    }
-  }
+  "supported_agents": ["claude-code", "grok", "cursor"]
 }
 ```
 
@@ -275,22 +304,29 @@ The manifest tracks cached components, their source URLs, fetched files, content
 | `commands` | Map of command name → command entry. |
 | `rules` | Map of rule name → rule entry. |
 | `modes` | Map of mode name → mode entry. |
-| `agents` | Map of agent name → agent entry. |
-| `projections` | Map of projection name (for example `opencode`, `claude-code`) → projection entry. |
+| `agents` | Map of agent name → agent entry (persona components, not "supported agents"). |
+| `supported_agents` | Array of agent **names** (`claude-code`, `opencode`, `grok`, `cursor`). Roots and layouts are defined by this skill, not stored here. |
 | `{type}.{name}.url` | The URL from which the component was fetched. |
 | `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
 | `{type}.{name}.sha256` | SHA-256 hash covering all of the component's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
 | `{type}.{name}.files` | List of all files cached for this component, relative to its cache directory. |
-| `projections.{name}.root` | Project-local projection root (must be inside repo), such as `.opencode` or `.claude`. |
-| `projections.{name}.strategy` | `symlink` or `copy` for projected files. |
-| `projections.{name}.managed_files` | Relative files under the projection root that Toolbox is allowed to overwrite/remove. |
-| `projections.{name}.updated_at` | ISO 8601 timestamp of the last projection sync. |
+
+Do **not** store `active_agent` or a `projections` map. Projection state is on disk under each agent root; ownership is by path convention.
+
+### 3.1 Manifest migration (older Toolbox)
+
+If `toolbox.json` exists but lacks `supported_agents`:
+
+1. If a legacy `projections` object exists, set `supported_agents` to the unique keys of that object (normalize known names such as `claude-code`, `opencode`).
+2. Also add any known agent whose root directory already exists on disk.
+3. Remove `projections` and any `active_agent` field if present.
+4. Write the updated manifest and re-project all `supported_agents` from cache (no network required).
 
 ### 4. Check for Updates
 
 Toolbox detects updates by comparing content, not by time. Each component's `sha256` in the manifest is the hash of all its files at fetch time.
 
-**On session start**, if cached components exist, proceed silently. Do not fetch anything automatically — the cached versions are ready to use. You may repair missing projections from cache without network fetch.
+**On session start**, if cached components exist, proceed silently. Do not fetch anything automatically — the cached versions are ready to use. You may enroll newly detected agents, repair missing projections from cache, and re-project without network fetch.
 
 **When the user asks** (e.g., "check for updates", "are my skills up to date?"):
 
@@ -322,23 +358,37 @@ When the user asks to update (e.g., "update skills", "refresh components"):
    c. Overwrite the cached files.
    d. Update `fetched_at` and `sha256` in the manifest.
 3. Remove any cached components that are no longer declared in the boot file.
-4. Recompute projection roots using the same safety rules as bootstrap.
-5. Re-sync projections:
+4. Refresh `supported_agents` (target set algorithm).
+5. Re-sync projections for **every** name in `supported_agents`:
    a. Add/update managed projected files for currently declared components.
    b. Remove stale managed projected files that no longer map to declared components.
-   c. Never remove or overwrite unmanaged files in projection roots.
+   c. Never remove or overwrite unmanaged files in agent roots.
 6. Write the updated `.toolbox/toolbox.json`.
 
 ### 6. Use Components
 
 - **Canonical source:** `.toolbox/` is the source of truth for fetches, hashing, and updates.
-- **Agent discovery:** Use projected files from the active agent root (`.opencode/`, `.claude/`, etc.) so each agent can find components where it expects them.
-- **Fallback:** If a projected file is missing but cache exists, restore the projection from `.toolbox/` and continue.
-- **Skills:** Load from `{projection_root}/skills/{name}/SKILL.md` (or `.toolbox/skills/{name}/SKILL.md` if projection is temporarily unavailable). References remain under the same relative structure.
-- **Commands:** When the user invokes a command by name (e.g., "/test"), read and follow `{projection_root}/commands/{name}.md`.
-- **Rules:** Read and apply all rules from `{projection_root}/rules/` at session start. Rules are always active.
-- **Modes:** When the user requests a mode by name, read and apply `{projection_root}/modes/{name}.md`.
-- **Agents:** When the user requests an agent by name, read and apply `{projection_root}/agents/{name}.md`.
+- **Agent discovery:** Prefer projected files under the **detected** agent's root when known; otherwise any supported root or the cache.
+- **Fallback:** If a projected file is missing but cache exists, restore the projection from `.toolbox/` into **all** `supported_agents` (or at least the detected agent) and continue.
+- **Skills:** Load from `{agent_root}/skills/{name}/SKILL.md` (or `.toolbox/skills/{name}/SKILL.md` if projection is temporarily unavailable). References remain under the same relative structure.
+- **Commands:** When the user invokes a command by name (e.g., "/test"), read and follow `{agent_root}/commands/{name}.md` (or cache).
+- **Rules:** Read and apply all rules from `{agent_root}/rules/` (or `.toolbox/rules/`) at session start. Rules are always active.
+- **Modes:** When the user requests a mode by name, read and apply `{agent_root}/modes/{name}.md` (or cache).
+- **Agents:** When the user requests an agent by name, read and apply `{agent_root}/agents/{name}.md` (or cache).
+
+### 7. Enroll / Unenroll Agents
+
+**Enroll** (add to `supported_agents` if missing):
+
+1. Resolve the agent name (`claude-code`, `opencode`, `grok`, `cursor`).
+2. Append to `supported_agents`, write manifest.
+3. Project all declared components into that agent's root from cache.
+
+**Unenroll** (explicit user request only):
+
+1. Remove the name from `supported_agents`.
+2. Delete only **managed** projected paths for that agent (paths that match declared-or-just-removed component projections).
+3. Write the manifest. Do not delete the agent root wholesale if it contains unmanaged files.
 
 ## URL Schemes
 
@@ -396,6 +446,7 @@ Reference discovery applies only to skills. All other component types are single
 - **Fetch failure (reference file):** If a reference file fails to fetch, warn the user and continue. The skill may still be usable without it.
 - **No `## Toolbox` section:** If the boot file has no `## Toolbox` section, toolbox does not apply. Do nothing.
 - **Invalid `file://` path:** If a `file://` path does not exist, treat it as a fetch failure — warn and skip.
+- **Unknown agent name:** Warn and skip; do not invent a root.
 - **Projection root outside repo:** Reject and warn. Never write to global/home paths.
 - **Projection conflict:** If a destination file exists and is not Toolbox-managed, do not overwrite; warn and skip that file.
 - **Projection failure:** If symlink creation fails, fallback to copy. If copy also fails, warn and continue with remaining files.
@@ -404,4 +455,5 @@ Reference discovery applies only to skills. All other component types are single
 ## Limitations
 
 - **No component dependencies.** Toolbox treats each component as independent. If skill A requires skill B, the skill author should note this in their `SKILL.md` description so that projects declare both explicitly.
-- **Known roots only by default.** Automatic projection currently targets known project-local roots (such as `.opencode` and `.claude`). Other agents may require explicit root mapping.
+- **Built-in agents only.** Automatic projection targets `claude-code`, `opencode`, `grok`, and `cursor`. Other products need a skill update (or remain unsupported).
+- **Same components for every supported agent.** There is no per-agent component subset in the manifest.
