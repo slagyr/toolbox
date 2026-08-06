@@ -50,7 +50,11 @@ Before **any** overwrite — cache update or projection sync — hash the destin
 
 This rule applies at both layers — the `.toolbox/` cache and every agent projection root — and has no exceptions. A file whose content Toolbox cannot account for is someone else's work, even when it sits at a managed path. Remember that `.toolbox/` and projection roots are typically gitignored: a clobbered edit there has no git history to recover from.
 
-**Last line of defense:** whenever Toolbox is about to replace or delete a file that fails the hash check (e.g. the user explicitly confirms an overwrite), first copy the existing file to `.toolbox/backup/<YYYY-MM-DD>/<type>/<name>/<relative-path>`. Nothing is ever unrecoverable.
+**Last line of defense:** whenever Toolbox is about to replace or delete a file that fails the hash check (e.g. the user explicitly confirms an overwrite), first copy the existing file to `.toolbox/backup/<YYYY-MM-DD>/<type>/<name>/<relative-path>`.
+
+**Backup retention:** Toolbox-created backups are pruned after **30 days**, and pruning always reports what it removed — it never runs silently. The guarantee is therefore precise: nothing is ever *silently* unrecoverable, and anything Toolbox replaced stays recoverable for at least 30 days.
+
+**Bookkeeping invariant:** only `.toolbox/{skills,commands,rules,modes,agents}/` hold components. Everything else under `.toolbox/` — `toolbox.json`, `backup/`, `incoming/`, and anything added later — is Toolbox's own bookkeeping: never treated as a component, and never removed by cleanup of undeclared components.
 
 ## Known Agents
 
@@ -328,6 +332,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
 | `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
 | `{type}.{name}.sha256` | Component-level hash: SHA-256 of the lines `{path}:{file-hash}` sorted by path, joined with newlines. Used to detect remote changes cheaply. |
 | `{type}.{name}.files` | Map of file path (relative to the component's cache directory) → SHA-256 of that file's content at fetch time. These per-file hashes are what the Prime Directive checks before overwriting anything. |
+| `{type}.{name}.source_rev` | Optional; recorded only for `file://` sources that resolve inside a git repository. The source checkout's HEAD commit at fetch time. This is what makes the previous upstream version recoverable for merging (§5.1) — walk up from the source path to the repo root, then `git show <source_rev>:<repo-relative-path>`. |
 
 Do **not** store `active_agent` or a `projections` map. Projection state is on disk under each agent root; ownership is by path convention.
 
@@ -356,7 +361,14 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
 1. For each component in the manifest, fetch all files from the URL.
 2. Compute the component hash from the fetched files (same method as bootstrap) and compare to the stored `sha256` — this detects **remote changes**.
 3. Hash the component's files on disk — in cache *and* in each supported projection root — against the manifest's `files` map. Any mismatch is a **local modification**.
-4. Report both dimensions:
+4. **`file://` sources — establish freshness honestly.** An `https://` fetch is authoritative: the response *is* the latest, so "up to date" is a claim Toolbox can vouch for. A `file://` URL pointing into a checkout is itself a cache of something upstream — comparing against it only proves the cache matches a directory on this disk. **Never report a `file://` component as "up to date"; reserve that phrase for sources Toolbox actually verified.** For a `file://` source, establish what can be known:
+   a. Walk up from the resolved source path looking for an enclosing `.git`.
+   b. If a repo with an upstream is found, `git fetch` it — best-effort with a short timeout. Fetch only updates remote-tracking refs, so it is safe to run unprompted, but it can hang on a credential prompt in unattended contexts; on any failure or timeout, degrade to "freshness unknown".
+   c. Count commits behind with `git rev-list --count HEAD..@{u}`. (Direction matters: `@{u}..HEAD` counts commits *ahead* — local commits not yet pushed — which is a different report.)
+   d. Also check whether the source is **dirty at the declared path**. Uncommitted changes there are normal for components under active development, but they are a different fact than "behind origin" — report them distinctly.
+   e. Behind → report `matches source; source is N commits behind <upstream>` and **offer** to pull. Never pull unprompted: the checkout is the user's repo — possibly dirty, on a branch, or carrying local commits — not Toolbox's cache.
+   f. No repo, no upstream, or fetch failed → report `matches source; source freshness unknown`, never "up to date".
+5. Report both dimensions, with the honest vocabulary:
    ```
    Component status:
      Skills:
@@ -364,11 +376,12 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
        - tdd (up to date; locally modified in .claude/ — will be preserved)
      Commands:
        - test (up to date)
+       - deploy (matches source; source is 3 commits behind origin/main — pull?)
      Rules:
        - no-force-push (changed upstream AND locally modified — needs merge, see below)
    Update? [y/n]
    ```
-5. If the user confirms, proceed with §5 (Update) for the changed components. Components that are locally modified follow §5.1 — they are never silently overwritten.
+6. If the user confirms, proceed with §5 (Update) for the changed components. Components that are locally modified follow §5.1 — they are never silently overwritten.
 
 ### 5. Update Components
 
@@ -380,7 +393,7 @@ When the user asks to update (e.g., "update skills", "refresh components"):
    b. For skills, re-discover and fetch reference files.
    c. **Prime Directive check:** hash each cached file against the manifest's `files` map. Clean files are overwritten with the fetched content. Modified files go through §5.1 instead — do not overwrite them here.
    d. Update `fetched_at`, `sha256`, and the `files` map in the manifest for every file actually written.
-3. Remove any cached components that are no longer declared in the boot file — but a no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so.
+3. Remove any cached components that are no longer declared in the boot file — but a no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so. Cleanup looks **only** inside `.toolbox/{skills,commands,rules,modes,agents}/`; everything else under `.toolbox/` is bookkeeping and is never swept (Prime Directive, bookkeeping invariant). While here, prune backups older than 30 days and report what was removed.
 4. Refresh `supported_agents` (target set algorithm).
 5. Re-sync projections for **every** name in `supported_agents`:
    a. **Prime Directive check first:** hash each existing projected file against the manifest. Clean or missing → copy from cache. Modified → §5.1; leave the file in place.
@@ -393,7 +406,7 @@ When the user asks to update (e.g., "update skills", "refresh components"):
 
 When a managed file fails the hash check, someone edited it deliberately. Never revert it as a side effect of an update. You have all three versions available, so act as the merge tool:
 
-- **base** — the previous upstream version. Its hash is in the manifest; its content is the cached copy (when the edit is in a projection) or must be re-derivable from the pinned URL. If base content cannot be recovered, fall back to a two-way comparison and be conservative.
+- **base** — the previous upstream version. Its hash is in the manifest; its content is the cached copy (when the edit is in a projection). When the *cache itself* was edited, recover base from the source: for `https://` re-fetch the URL (a SHA-pinned URL reproduces it exactly); for a git-backed `file://` source, `git show <source_rev>:<repo-relative-path>` using the manifest's `source_rev` (§3). If base content cannot be recovered, fall back to a two-way comparison and be conservative.
 - **ours** — the locally edited file on disk.
 - **theirs** — the freshly fetched remote content.
 
@@ -411,6 +424,8 @@ Procedure:
    - **Take ownership:** switch the boot-file declaration to the project's own copy (a relative `file://` URL or a fork's `https://` URL). The component is then declared as the project's; upstream refreshes stop touching it.
 
 Every drifted file ends each update in exactly one of these states: **kept** (upstream unchanged), **merged forward**, **kept + incoming staged** (conflict), **upstreamed**, or **owned**. Never silently reverted; never silently forked forever.
+
+**`incoming/` is derived state.** Every update pass rewrites or clears staged files to match the *current* conflict set, and resolving a conflict — merging it, adopting theirs, upstreaming, or taking ownership — deletes its staged copy. A file under `.toolbox/incoming/` therefore always means exactly one thing: an unresolved conflict from the most recent update. It is never a component and never swept as one (bookkeeping invariant, Prime Directive).
 
 ### 6. Use Components
 
@@ -479,6 +494,7 @@ Resolution rules:
 1. Resolve the path against the boot file's directory, then normalize it.
 2. Reject any path that escapes the project root after normalization, and warn. A component source may sit anywhere inside the project, but never above it.
 3. Treat a missing target as a fetch failure — warn and skip (§Error Handling). Do not fall back to a stale cache silently.
+4. At fetch time (absolute or relative form), if the resolved source lives inside a git repository, record the checkout's HEAD commit as `source_rev` in the manifest (§3). It anchors freshness reporting (§4) and merge-base recovery (§5.1) — without it, a `file://` component has no pinnable history the way a `raw.githubusercontent.com/{sha}/…` URL does.
 
 **Note:** Absolute `file://` URLs are not portable across machines. Prefer the relative form, or `https://` for components that need to work everywhere.
 

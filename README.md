@@ -224,6 +224,8 @@ Use a commit SHA instead of a branch name to lock a component to a specific vers
 
 Toolbox stores a SHA-256 hash of each of a component's files at fetch time (plus a component-level hash for cheap comparison). When you ask to check for updates, it re-fetches and compares hashes — reporting components whose content changed upstream **and** files that were modified locally. No polling, no timers, no wasted fetches.
 
+Status reports are honest about what was verified. An `https://` fetch is authoritative, so those components can be called **up to date**. A `file://` source is a checkout — itself a cache of something upstream — so those report **matches source**, and when the source is a git checkout with an upstream, Toolbox fetches (never pulls) and tells you how far behind origin it is, offering the pull instead of doing it.
+
 ## Non-Destructive by Design
 
 Agents and humans sometimes edit a managed file in place — a local fix to a skill, a project-specific tweak to a command. Toolbox never destroys those edits. The rule is simple: **never overwrite bytes it didn't write.**
@@ -232,6 +234,6 @@ Before any overwrite, Toolbox hashes the file on disk against the manifest. A fi
 
 - If upstream didn't change, the local edit is simply kept (and reported).
 - If upstream changed too, the agent performs a **three-way merge** — your edits carried forward onto the new upstream content — shown to you before anything is written. On a genuine conflict, your version stays in place and the new upstream version is staged to `.toolbox/incoming/` for you to reconcile.
-- Any write that replaces modified content backs the original up to `.toolbox/backup/<date>/` first. Nothing is ever unrecoverable.
+- Any write that replaces modified content backs the original up to `.toolbox/backup/<date>/` first (kept for 30 days; pruning is always reported). Nothing is ever silently unrecoverable.
 
 Every update ends with each drifted file in a deliberate state: kept, merged forward, staged for review — or, to end the drift, **upstreamed** (Toolbox offers to turn your local diff into a PR against the component's source repo) or **owned** (switch the declaration to your own copy via a relative `file://` URL, so upstream refreshes stop touching it).
