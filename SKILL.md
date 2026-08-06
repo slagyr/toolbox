@@ -5,8 +5,9 @@ description: >-
   project. Parses component URLs from the project's boot file, fetches them into
   a local .toolbox/ cache, projects them into agent-specific project-local paths
   (.claude/, .grok/, .cursor/, .opencode/), remembers supported agents in the
-  manifest, tracks freshness, and updates on demand. Use when a project's boot
-  file declares components via URL.
+  manifest, tracks freshness, and updates on demand — never overwriting local
+  edits to managed files. Use when a project's boot file declares components
+  via URL.
 ---
 
 # Toolbox — Component Management
@@ -36,6 +37,20 @@ Toolbox has two layers:
 Projection roots are always inside the repository (for example `.claude/`, `.grok/`, `.cursor/`, `.opencode/`).
 
 Never install or sync Toolbox-managed components to global locations such as `~/.claude`, `~/.grok`, `~/.cursor`, or `~/.config/opencode`.
+
+## The Prime Directive: Never Overwrite Bytes You Didn't Write
+
+Agents and humans sometimes edit a Toolbox-managed file in place — a local fix to a skill, a project-specific tweak to a command. Those edits must never be destroyed by a refresh.
+
+Before **any** overwrite — cache update or projection sync — hash the destination file and compare it to the manifest's recorded per-file hash (§3):
+
+- **Hash matches** → the file is exactly what Toolbox last wrote. Safe to replace.
+- **File missing** → restore it from cache (or fetch).
+- **Hash differs** → the file was locally modified. It is **protected**: never silently replace or delete it. Follow §5.1 (Local Modifications).
+
+This rule applies at both layers — the `.toolbox/` cache and every agent projection root — and has no exceptions. A file whose content Toolbox cannot account for is someone else's work, even when it sits at a managed path. Remember that `.toolbox/` and projection roots are typically gitignored: a clobbered edit there has no git history to recover from.
+
+**Last line of defense:** whenever Toolbox is about to replace or delete a file that fails the hash check (e.g. the user explicitly confirms an overwrite), first copy the existing file to `.toolbox/backup/<YYYY-MM-DD>/<type>/<name>/<relative-path>`. Nothing is ever unrecoverable.
 
 ## Known Agents
 
@@ -233,16 +248,16 @@ When `.toolbox/toolbox.json` is missing:
    b. Discover reference files by parsing relative markdown links in `SKILL.md` — patterns like `[text](references/foo.md)` or `[text](some/path.md)`. Only include links to relative paths (not absolute URLs or anchors).
    c. Compute the base URL by removing `SKILL.md` from the skill's URL. Fetch each discovered reference file relative to that base URL.
    d. Write all fetched files into `.toolbox/skills/{name}/`, preserving directory structure.
-   e. Compute a SHA-256 hash covering all fetched files (concatenate file contents in sorted order by path, then hash).
+   e. Compute a SHA-256 hash of **each** fetched file (these become the `files` map, §3). The component-level `sha256` is the SHA-256 of the lines `{path}:{file-hash}` sorted by path and joined with newlines — so it changes when any file's content changes, a file is added/removed, or a file is renamed.
 4. For each single-file component (commands, rules, modes, agents):
    a. Fetch the file from the URL.
    b. Write it to `.toolbox/{type}/{name}.md`.
-   c. Compute the SHA-256 hash of the fetched content.
+   c. Compute the SHA-256 hash of the fetched content (recorded per file; component `sha256` derived the same way as for skills).
 5. Build `supported_agents` (target set) per **Projection target set** above (detect + existing roots; list starts empty on first run).
 6. Project cached components from `.toolbox/` into **each** supported agent's root:
    a. Create needed directories.
    b. Prefer copy (symlink allowed when reliable; fallback to copy).
-   c. If a target file already exists and is not Toolbox-managed (by convention), do not overwrite it; warn and skip.
+   c. If a target file already exists, apply the Prime Directive: replace it only when its content is byte-identical to the cached file being projected (no manifest exists yet at bootstrap, so compare content directly). Otherwise it is protected — leave it, warn, and report it as a local modification (§5.1).
 7. Write `.toolbox/toolbox.json` with component entries and `supported_agents` (see §3).
 8. Ensure `.toolbox/` is listed in the project's `.gitignore`. If not, add it.
 
@@ -257,7 +272,10 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/skills/tdd/SKILL.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "f6e5d4c3b2a1...",
-      "files": ["SKILL.md"]
+      "files": {
+        "SKILL.md": "1a2b3c4d5e6f...",
+        "references/details.md": "6f5e4d3c2b1a..."
+      }
     }
   },
   "commands": {
@@ -265,7 +283,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/commands/test.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "d4e5f6a1b2c3...",
-      "files": ["test.md"]
+      "files": {"test.md": "2b3c4d5e6f1a..."}
     }
   },
   "rules": {
@@ -273,7 +291,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/rules/no-force-push.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "c3d4e5f6a1b2...",
-      "files": ["no-force-push.md"]
+      "files": {"no-force-push.md": "3c4d5e6f1a2b..."}
     }
   },
   "modes": {
@@ -281,7 +299,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/modes/architect.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "e5f6a1b2c3d4...",
-      "files": ["architect.md"]
+      "files": {"architect.md": "4d5e6f1a2b3c..."}
     }
   },
   "agents": {
@@ -289,7 +307,7 @@ The manifest tracks cached components, their source URLs, fetched files, content
       "url": "https://raw.githubusercontent.com/slagyr/agent-lib/main/agents/reviewer.md",
       "fetched_at": "2026-03-06T12:00:00Z",
       "sha256": "a1b2c3d4e5f6...",
-      "files": ["reviewer.md"]
+      "files": {"reviewer.md": "5e6f1a2b3c4d..."}
     }
   },
   "supported_agents": ["claude-code", "grok", "cursor"]
@@ -308,8 +326,8 @@ The manifest tracks cached components, their source URLs, fetched files, content
 | `supported_agents` | Array of agent **names** (`claude-code`, `opencode`, `grok`, `cursor`). Roots and layouts are defined by this skill, not stored here. |
 | `{type}.{name}.url` | The URL from which the component was fetched. |
 | `{type}.{name}.fetched_at` | ISO 8601 timestamp of when the component was last fetched. |
-| `{type}.{name}.sha256` | SHA-256 hash covering all of the component's files at fetch time. Computed by concatenating file contents in sorted order by path, then hashing. Used to detect remote changes. |
-| `{type}.{name}.files` | List of all files cached for this component, relative to its cache directory. |
+| `{type}.{name}.sha256` | Component-level hash: SHA-256 of the lines `{path}:{file-hash}` sorted by path, joined with newlines. Used to detect remote changes cheaply. |
+| `{type}.{name}.files` | Map of file path (relative to the component's cache directory) → SHA-256 of that file's content at fetch time. These per-file hashes are what the Prime Directive checks before overwriting anything. |
 
 Do **not** store `active_agent` or a `projections` map. Projection state is on disk under each agent root; ownership is by path convention.
 
@@ -322,6 +340,11 @@ If `toolbox.json` exists but lacks `supported_agents`:
 3. Remove `projections` and any `active_agent` field if present.
 4. Write the updated manifest and re-project all `supported_agents` from cache (no network required).
 
+If any component's `files` is a **list** (older Toolbox) rather than a map:
+
+1. Hash each listed file as it exists in `.toolbox/` cache and rebuild `files` as a path → hash map. No network required.
+2. Caveat: if the cache itself was hand-edited before this migration, those edits are baked in as the recorded baseline. That is the safe direction — the edit is treated as canonical rather than silently reverted on the next update.
+
 ### 4. Check for Updates
 
 Toolbox detects updates by comparing content, not by time. Each component's `sha256` in the manifest is the hash of all its files at fetch time.
@@ -331,21 +354,21 @@ Toolbox detects updates by comparing content, not by time. Each component's `sha
 **When the user asks** (e.g., "check for updates", "are my skills up to date?"):
 
 1. For each component in the manifest, fetch all files from the URL.
-2. Compute the SHA-256 hash covering all fetched files (same method as bootstrap).
-3. Compare to the stored `sha256` in the manifest.
-4. Report results:
+2. Compute the component hash from the fetched files (same method as bootstrap) and compare to the stored `sha256` — this detects **remote changes**.
+3. Hash the component's files on disk — in cache *and* in each supported projection root — against the manifest's `files` map. Any mismatch is a **local modification**.
+4. Report both dimensions:
    ```
-   Component updates available:
+   Component status:
      Skills:
-       - braids (changed)
-       - tdd (up to date)
+       - braids (changed upstream)
+       - tdd (up to date; locally modified in .claude/ — will be preserved)
      Commands:
        - test (up to date)
      Rules:
-       - no-force-push (changed)
+       - no-force-push (changed upstream AND locally modified — needs merge, see below)
    Update? [y/n]
    ```
-5. If the user confirms, proceed with §5 (Update) for the changed components.
+5. If the user confirms, proceed with §5 (Update) for the changed components. Components that are locally modified follow §5.1 — they are never silently overwritten.
 
 ### 5. Update Components
 
@@ -355,15 +378,39 @@ When the user asks to update (e.g., "update skills", "refresh components"):
 2. For each declared component:
    a. Re-fetch all files from the URL.
    b. For skills, re-discover and fetch reference files.
-   c. Overwrite the cached files.
-   d. Update `fetched_at` and `sha256` in the manifest.
-3. Remove any cached components that are no longer declared in the boot file.
+   c. **Prime Directive check:** hash each cached file against the manifest's `files` map. Clean files are overwritten with the fetched content. Modified files go through §5.1 instead — do not overwrite them here.
+   d. Update `fetched_at`, `sha256`, and the `files` map in the manifest for every file actually written.
+3. Remove any cached components that are no longer declared in the boot file — but a no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so.
 4. Refresh `supported_agents` (target set algorithm).
 5. Re-sync projections for **every** name in `supported_agents`:
-   a. Add/update managed projected files for currently declared components.
-   b. Remove stale managed projected files that no longer map to declared components.
+   a. **Prime Directive check first:** hash each existing projected file against the manifest. Clean or missing → copy from cache. Modified → §5.1; leave the file in place.
+   b. Remove stale managed projected files that no longer map to declared components (same backup-if-modified rule as step 3).
    c. Never remove or overwrite unmanaged files in agent roots.
 6. Write the updated `.toolbox/toolbox.json`.
+7. End with a summary that names every file that was preserved, merged, staged, or backed up. Silence about a protected file is a bug.
+
+### 5.1 Local Modifications: Detect, Merge, Preserve
+
+When a managed file fails the hash check, someone edited it deliberately. Never revert it as a side effect of an update. You have all three versions available, so act as the merge tool:
+
+- **base** — the previous upstream version. Its hash is in the manifest; its content is the cached copy (when the edit is in a projection) or must be re-derivable from the pinned URL. If base content cannot be recovered, fall back to a two-way comparison and be conservative.
+- **ours** — the locally edited file on disk.
+- **theirs** — the freshly fetched remote content.
+
+Procedure:
+
+1. **Compute the local diff** (base → ours) and show the user a short summary of what was changed locally.
+2. **If upstream did not change** (base = theirs): keep ours untouched. Just report the drift.
+3. **If upstream changed:** perform a three-way merge — apply the local edits on top of the new upstream content, semantically (you are an agent reading markdown, not `patch(1)`; preserve the *intent* of the local edit even if surrounding text moved).
+   - Present the merged result (or a diff) and write it only on confirmation.
+   - Update the manifest hash to the **merged** content so the next update sees it as the new local baseline... and it will be flagged as locally-modified again next time upstream moves, which is correct.
+   - If the local edit and the upstream change genuinely conflict, keep ours in place and write theirs to `.toolbox/incoming/{type}/{name}/{path}` so nothing is lost while the user decides.
+4. **Back up before any write** that replaces modified content: copy the pre-merge file to `.toolbox/backup/<YYYY-MM-DD>/...` (Prime Directive, last line of defense).
+5. **Offer the two exits from permanent drift** — a merged-forward local edit is still a fork, and forks rot:
+   - **Upstream it:** the component URL names its source repo. Offer to turn the local diff into a commit or PR against that repo so the edit becomes everyone's.
+   - **Take ownership:** switch the boot-file declaration to the project's own copy (a relative `file://` URL or a fork's `https://` URL). The component is then declared as the project's; upstream refreshes stop touching it.
+
+Every drifted file ends each update in exactly one of these states: **kept** (upstream unchanged), **merged forward**, **kept + incoming staged** (conflict), **upstreamed**, or **owned**. Never silently reverted; never silently forked forever.
 
 ### 6. Use Components
 
@@ -462,8 +509,9 @@ Reference discovery applies only to skills. All other component types are single
 - **`file://` path escapes the project:** If a relative file URL normalizes to a path above the project root, reject and warn. Never read component sources from outside the project.
 - **Unknown agent name:** Warn and skip; do not invent a root.
 - **Projection root outside repo:** Reject and warn. Never write to global/home paths.
-- **Projection conflict:** If a destination file exists and is not Toolbox-managed, do not overwrite; warn and skip that file.
-- **Projection failure:** If symlink creation fails, fallback to copy. If copy also fails, warn and continue with remaining files.
+- **Projection conflict:** If a destination file exists and its hash does not match the manifest (or, at bootstrap, its content differs from cache), it is protected — do not overwrite; warn and route through §5.1.
+- **Locally modified file during update:** Never overwrite or delete it in passing. Follow §5.1: keep, merge with confirmation, or stage the incoming version to `.toolbox/incoming/`; back up before any replacing write.
+- **Projection failure:** If symlink creation fails, fallback to copy. If copy also fails, warn and continue with remaining files. (Note: symlinked projections make the cache and projection one file — an edit through the symlink edits the cache. Prefer copy where local edits are likely.)
 - **General rule:** Never silently swallow errors. Always inform the user what failed and why.
 
 ## Limitations

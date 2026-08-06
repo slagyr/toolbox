@@ -132,7 +132,7 @@ The skill maps each name to a root and layout. There is no `active_agent` field 
 
 **Loading this session:** prefer the detected agent's tree when known; fall back to `.toolbox/`.
 
-Prefer **copy** into projection roots (symlink allowed when reliable). Only overwrite or remove paths that match declared component projections (managed by convention).
+Prefer **copy** into projection roots (symlink makes cache and projection the same file, which defeats local-edit detection). Only overwrite or remove paths that match declared component projections (managed by convention) — and even those only when their content hash proves Toolbox wrote them (see Non-Destructive by Design).
 
 ## Component Types
 
@@ -222,4 +222,16 @@ Use a commit SHA instead of a branch name to lock a component to a specific vers
 
 ## Update Detection
 
-Toolbox stores a SHA-256 hash covering all of a component's files at fetch time. When you ask to check for updates, it re-fetches and compares hashes — only reporting components whose content has actually changed. No polling, no timers, no wasted fetches.
+Toolbox stores a SHA-256 hash of each of a component's files at fetch time (plus a component-level hash for cheap comparison). When you ask to check for updates, it re-fetches and compares hashes — reporting components whose content changed upstream **and** files that were modified locally. No polling, no timers, no wasted fetches.
+
+## Non-Destructive by Design
+
+Agents and humans sometimes edit a managed file in place — a local fix to a skill, a project-specific tweak to a command. Toolbox never destroys those edits. The rule is simple: **never overwrite bytes it didn't write.**
+
+Before any overwrite, Toolbox hashes the file on disk against the manifest. A file that matches is Toolbox's own and is safe to replace. A file that differs was edited deliberately and is **protected**:
+
+- If upstream didn't change, the local edit is simply kept (and reported).
+- If upstream changed too, the agent performs a **three-way merge** — your edits carried forward onto the new upstream content — shown to you before anything is written. On a genuine conflict, your version stays in place and the new upstream version is staged to `.toolbox/incoming/` for you to reconcile.
+- Any write that replaces modified content backs the original up to `.toolbox/backup/<date>/` first. Nothing is ever unrecoverable.
+
+Every update ends with each drifted file in a deliberate state: kept, merged forward, staged for review — or, to end the drift, **upstreamed** (Toolbox offers to turn your local diff into a PR against the component's source repo) or **owned** (switch the declaration to your own copy via a relative `file://` URL, so upstream refreshes stop touching it).
