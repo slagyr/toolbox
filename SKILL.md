@@ -230,7 +230,6 @@ A project's declarations can span multiple files. The boot file's `## Toolbox` s
 - When assembling the declaration set (bootstrap and update), glob the project for `TOOLBOX.md` and `*.TOOLBOX.md`, recursively from the project root.
 - Skip `.toolbox/` and dot-directories (`.git/`, agent projection roots like `.claude/`).
 - **Report every discovered file** each time the set is assembled. Discovery must never be silent — an unnoticed declaration file is an unnoticed source of tools.
-- A legacy `TOOLBOX.local.md` is honored as if it were named `local.TOOLBOX.md`.
 
 ### Format
 
