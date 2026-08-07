@@ -67,21 +67,19 @@
        vec))
 
 (defn asset-paths
-  "Bare relative file paths mentioned in inline code spans — how skills
-   commonly reference non-markdown assets (`assets/logo.svg`). Conservative:
-   relative, contains a directory separator, ends in a file extension, no
-   spaces or template placeholders, doesn't start with a dot, stays inside
-   the component directory. These are candidates only — callers skip fetch
+  "Relative file paths under the conventional assets/ directory mentioned in
+   inline code spans (`assets/logo.svg`) — how skills reference non-markdown
+   assets. Restricted to assets/ on purpose: a bare shape test cannot tell
+   \"an asset this skill needs\" from \"a path this skill talks about\"
+   (e.g. `src/foo/core.clj` in copy-this-file instructions), and the
+   convention is the semantic boundary. Candidates only — callers skip fetch
    misses silently."
   [text]
   (->> (re-seq #"`([^`\n]+)`" text)
        (map second)
+       (filter #(str/starts-with? % "assets/"))
        (filter #(re-matches #"[^\s{}<>*$]+" %))
-       (remove #(or (str/includes? % "://")
-                    (str/starts-with? % "/")
-                    (str/starts-with? % "#")
-                    (str/starts-with? % ".")))
-       (filter #(str/includes? % "/"))
+       (remove #(str/includes? % "://"))
        (filter #(re-find #"\.[A-Za-z0-9]{1,8}$" %))
        (remove escapes-component-dir?)
        distinct

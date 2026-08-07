@@ -83,5 +83,10 @@ Uses [toolbox](https://example.com/SKILL.md).
                    "`https://x.com/a.svg` `../other/logo.svg` `no-slash.svg` "
                    "`with space/x.svg`"))))
 
+  (it "ignores paths outside assets/ — prose about files is not an asset declaration"
+    (should= []
+             (parse/asset-paths
+              "1. Copy `src/dry4clj/core.clj` into the target repo at `src/dry4clj/core.clj`.")))
+
   (it "requires a file extension"
     (should= [] (parse/asset-paths "`assets/subdir`"))))

@@ -453,6 +453,7 @@ When the user asks to update (e.g., "update skills", "refresh components"):
    b. For skills, re-discover and fetch reference files.
    c. **Prime Directive check:** hash each cached file against the manifest's `files` map. Clean files are overwritten with the fetched content. Modified files go through §5.1 instead — do not overwrite them here.
    d. Update `fetched_at`, `sha256`, and the `files` map in the manifest for every file actually written.
+   e. **Reap files dropped from the component's set** — recorded in the manifest but absent from the fresh fetch: remove them from cache and every projection (protected ones are backed up first), and report each removal.
 3. Remove any cached components that are no longer declared in **any** declaration file — but only when every declaration file loaded successfully this run; if any failed to load, skip removal entirely (§Composition, Safety). A no-longer-declared file that fails the hash check is protected: back it up to `.toolbox/backup/<date>/` before removal, and say so. Cleanup looks **only** inside `.toolbox/{skills,commands,rules,modes,agents}/`; everything else under `.toolbox/` is bookkeeping and is never swept (Prime Directive, bookkeeping invariant). While here, prune backups older than 30 days and report what was removed.
 4. Refresh `supported_agents` (target set algorithm).
 5. Re-sync projections for **every** name in `supported_agents`:
@@ -565,7 +566,7 @@ When fetching a skill's `SKILL.md`, parse it for relative markdown links to disc
 **Match patterns:**
 - `[text](references/foo.md)` — standard markdown link with relative path
 - `[text](some/path.md)` — any relative path (no scheme, no leading `/`)
-- `` `assets/logo.svg` `` — bare relative paths in inline code spans, the common way skills reference non-markdown assets. These are **candidates**, held to a stricter shape (contains `/`, ends in a file extension, no spaces or template placeholders, no leading dot) and fetch misses are skipped **silently** — unlike markdown-link references, whose fetch failures warn.
+- `` `assets/logo.svg` `` — relative paths in inline code spans, **only under the conventional `assets/` directory**. A bare shape test cannot distinguish "an asset this skill needs" from "a path this skill talks about" (`` `src/foo/core.clj` `` in copy-this-file instructions), so the `assets/` convention is the semantic boundary. These are **candidates**: fetch misses are skipped silently — unlike markdown-link references, whose fetch failures warn.
 
 **Exclude:**
 - Absolute URLs (`https://...`, `http://...`, `file://...`)

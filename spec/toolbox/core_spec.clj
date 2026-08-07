@@ -46,7 +46,27 @@
       (should= #{"SKILL.md" "assets/marque.svg" "assets/lockup.svg"} (set (keys files)))
       (should= "<svg>lockup</svg>"
                (slurp (io/file @root ".claude" "skills" "brand" "assets" "lockup.svg")))
-      (should= [] (:warnings result)))))
+      (should= [] (:warnings result))))
+
+  (it "reaps files dropped from a component's set, backing up local edits"
+    (write! @root "lib/skills/brand/SKILL.md" "# Brand")
+    (write! @root "lib/skills/brand/assets/marque.svg" "<svg>marque</svg>")
+    (write! @root "lib/skills/brand/assets/lockup.svg" "<svg>lockup</svg>")
+    (write! @root "AGENTS.md"
+            "## Toolbox\n### Skills\n- [brand](file://./lib/skills/brand/SKILL.md)\n")
+    (.mkdirs (io/file @root ".claude"))
+    (core/update! @root {})
+    (spit (io/file @root ".toolbox" "skills" "brand" "assets" "lockup.svg") "local tweak")
+    (io/delete-file (io/file @root "lib/skills/brand/assets/lockup.svg"))
+    (let [result (core/update! @root {})
+          files  (get-in (manifest/load-manifest @root) ["skills" "brand" "files"])]
+      (should (:ok result))
+      (should= #{"SKILL.md" "assets/marque.svg"} (set (keys files)))
+      (should-not (.exists (io/file @root ".toolbox" "skills" "brand" "assets" "lockup.svg")))
+      (should-not (.exists (io/file @root ".claude" "skills" "brand" "assets" "lockup.svg")))
+      (should= 1 (count (:backed-up result)))
+      (should= "local tweak" (slurp (io/file @root (first (:backed-up result)))))
+      (should= 2 (count (:removed-files result))))))
 
 (describe "update! end to end (file:// fixtures)"
   (with root (temp-root))

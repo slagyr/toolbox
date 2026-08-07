@@ -102,6 +102,24 @@
                                :file      (rel-path root dest)
                                :canonical (rel-path root cache-f)})))))))
 
+(defn- reap-stale-files!
+  "Delete cache and projection files that were part of a component but are
+   absent from its freshly fetched file set. Protected files are backed up
+   first — never silently destroyed."
+  [root agents type name old-entry new-entry report]
+  (let [old-files (get old-entry "files" {})
+        new-files (get new-entry "files" {})
+        dir       (manifest/cache-dir root type name)]
+    (doseq [[rel expected] old-files
+            :when (not (contains? new-files rel))
+            f (cons (io/file dir rel)
+                    (map #(sync/projected-file root % type name rel) agents))]
+      (when (.exists f)
+        (when (= :protected (sync/file-state f expected))
+          (note! report :backed-up (rel-path root (sync/backup! root f))))
+        (io/delete-file f true)
+        (note! report :removed-files (rel-path root f))))))
+
 (defn- remove-component!
   "Remove a no-longer-declared component: cache and managed projections.
    Protected files are backed up before removal — never silently destroyed."
@@ -132,7 +150,7 @@
     (if (empty? (:declaration-files decl))
       {:ok false :error "no Toolbox declarations found (no boot-file ## Toolbox section and no *.TOOLBOX.md files)"}
       (let [old        (loaded-manifest root)
-            report     (atom {:wrote [] :attention [] :warnings [] :removed [] :backed-up []})
+            report     (atom {:wrote [] :attention [] :warnings [] :removed [] :removed-files [] :backed-up []})
             components (decl-components decl)
             agents     (target-agents root old enroll)
             synced
@@ -140,7 +158,9 @@
              (fn [m {:keys [type name] :as c}]
                (let [old-entry (get-in old [type name])]
                  (try
-                   (assoc-in m [type name] (sync-cache! root c old-entry report))
+                   (let [entry (sync-cache! root c old-entry report)]
+                     (reap-stale-files! root agents type name old-entry entry report)
+                     (assoc-in m [type name] entry))
                    (catch Exception e
                      (note! report :warnings {:component name :type type :error (.getMessage e)})
                      (if old-entry (assoc-in m [type name] old-entry) m)))))
