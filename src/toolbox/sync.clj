@@ -114,7 +114,7 @@
   [root]
   (let [f       (io/file root ".gitignore")
         content (if (.exists f) (slurp f) "")]
-    (if (re-find #"(?m)^\.toolbox/?$" content)
+    (if (re-find #"(?m)^/?\.toolbox/?$" content)
       false
       (do (spit f (str content
                        (when-not (or (= content "") (.endsWith ^String content "\n")) "\n")

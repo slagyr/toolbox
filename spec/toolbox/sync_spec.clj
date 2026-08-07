@@ -85,4 +85,10 @@
   (it "adds .toolbox/ to .gitignore once"
     (should (sync/ensure-gitignore! @root))
     (should-not (sync/ensure-gitignore! @root))
-    (should-contain ".toolbox/" (slurp (io/file @root ".gitignore")))))
+    (should-contain ".toolbox/" (slurp (io/file @root ".gitignore"))))
+
+  (it "recognizes existing entries in any valid form — no duplicates"
+    (doseq [existing ["/.toolbox/" ".toolbox" "/.toolbox" ".toolbox/"]]
+      (spit (io/file @root ".gitignore") (str existing "\n"))
+      (should-not (sync/ensure-gitignore! @root))
+      (should= (str existing "\n") (slurp (io/file @root ".gitignore"))))))
