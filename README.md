@@ -236,6 +236,18 @@ Use a commit SHA instead of a branch name to lock a component to a specific vers
 - [tdd](https://raw.githubusercontent.com/slagyr/agent-lib/a1b2c3d/skills/tdd/SKILL.md)
 ```
 
+## Implementation: bb Fast Path
+
+The deterministic parts of the spec are implemented as `.clj` in this repo (`src/`), runnable with [babashka](https://babashka.org) or on the JVM:
+
+```sh
+bb toolbox bootstrap|status|update|enroll <agent>|unenroll <agent>|prune [--root PATH]
+clojure -M:run <op>          # same thing on the JVM
+bb spec                      # run the speclj suite
+```
+
+Agents use this as the fast path — one command instead of dozens of tool calls, with hashing done by a machine rather than a language model. The JSON output lists anything requiring judgment (conflicts to merge, overrides to explain) under `"attention"`; the agent handles those per the skill. Environments without `bb` fall back to the skill's manual procedures, which remain the normative spec.
+
 ## Update Detection
 
 Toolbox stores a SHA-256 hash of each of a component's files at fetch time (plus a component-level hash for cheap comparison). When you ask to check for updates, it re-fetches and compares hashes — reporting components whose content changed upstream **and** files that were modified locally. No polling, no timers, no wasted fetches.

@@ -1,0 +1,4 @@
+{:paths ["src"]
+ :tasks {toolbox {:requires ([toolbox.cli :as cli])
+                  :task     (apply cli/-main *command-line-args*)}
+         spec    {:task (clojure "-M:spec")}}}

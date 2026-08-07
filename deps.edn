@@ -1,0 +1,10 @@
+{:paths ["src"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        cheshire/cheshire {:mvn/version "5.13.0"}}
+ :aliases {:run  {:main-opts ["-m" "toolbox.cli"]}
+           :spec {:extra-paths ["spec"]
+                  :extra-deps {speclj/speclj {:mvn/version "3.10.0"}}
+                  :main-opts ["-m" "speclj.main" "-c"]}
+           :test {:extra-paths ["spec"]
+                  :extra-deps {speclj/speclj {:mvn/version "3.10.0"}}
+                  :main-opts ["-m" "speclj.main" "-c"]}}}

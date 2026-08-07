@@ -28,6 +28,25 @@ Respond to these common short prompts (or close variations):
 
 This skill also applies when you land in a project whose boot file contains a `## Toolbox` section that links to this SKILL.md. In that case, follow the full procedure to make declared components available.
 
+## Fast Path: babashka
+
+Everything deterministic in this spec — discovery, parsing, fetching, hashing, guarded writes, projection, backups, pruning — is implemented as `.clj` code in this repo, runnable under babashka or the JVM. **When `bb` is on PATH, use it instead of performing the procedures by hand**: one command replaces dozens of tool calls, and it cannot get a hash comparison wrong.
+
+1. Ensure a checkout of this repo at `.toolbox/bin/toolbox` (bookkeeping, never a component):
+   `git clone https://github.com/slagyr/toolbox .toolbox/bin/toolbox` — or `git -C .toolbox/bin/toolbox pull --ff-only` to refresh.
+2. Run operations from the project root:
+   ```sh
+   bb --config .toolbox/bin/toolbox/bb.edn toolbox bootstrap   # first run
+   bb --config .toolbox/bin/toolbox/bb.edn toolbox status      # check updates + drift + freshness
+   bb --config .toolbox/bin/toolbox/bb.edn toolbox update      # apply clean changes
+   bb --config .toolbox/bin/toolbox/bb.edn toolbox enroll codex
+   bb --config .toolbox/bin/toolbox/bb.edn toolbox prune
+   ```
+3. Output is JSON. The script applies every mechanical change and **stops at every judgment call**: files needing human/agent decisions are listed under `"attention"`. Handling those is your job — the §5.1 three-way merge, the upstream-a-PR offer, narrating overrides and removals to the user. The script never merges, never overwrites a protected file, and never deletes without a backup.
+4. No `bb` on the machine → follow the manual procedures below; they are the normative spec. The code implements this spec — when they disagree, the spec wins and the divergence is a bug (fix the code, not the spec).
+
+Division of labor, in one line: **the script does the bookkeeping; the agent does the judgment.**
+
 ## Core Model: Cache + Projection
 
 Toolbox has two layers:
