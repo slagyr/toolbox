@@ -112,12 +112,16 @@
         dir       (manifest/cache-dir root type name)]
     (doseq [[rel expected] old-files
             :when (not (contains? new-files rel))
-            f (cons (io/file dir rel)
-                    (map #(sync/projected-file root % type name rel) agents))]
+            [f stop] (cons [(io/file dir rel) dir]
+                           (map (fn [agent]
+                                  [(sync/projected-file root agent type name rel)
+                                   (io/file root (get sync/agent-roots agent))])
+                                agents))]
       (when (.exists f)
         (when (= :protected (sync/file-state f expected))
           (note! report :backed-up (rel-path root (sync/backup! root f))))
         (io/delete-file f true)
+        (sync/delete-empty-parents! f stop)
         (note! report :removed-files (rel-path root f))))))
 
 (defn- remove-component!

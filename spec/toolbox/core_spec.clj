@@ -48,22 +48,24 @@
                (slurp (io/file @root ".claude" "skills" "brand" "assets" "lockup.svg")))
       (should= [] (:warnings result))))
 
-  (it "reaps files dropped from a component's set, backing up local edits"
+  (it "reaps files dropped from a component's set, backing up local edits and removing emptied dirs"
     (write! @root "lib/skills/brand/SKILL.md" "# Brand")
     (write! @root "lib/skills/brand/assets/marque.svg" "<svg>marque</svg>")
-    (write! @root "lib/skills/brand/assets/lockup.svg" "<svg>lockup</svg>")
+    (write! @root "lib/skills/brand/assets/alt/lockup.svg" "<svg>lockup</svg>")
     (write! @root "AGENTS.md"
             "## Toolbox\n### Skills\n- [brand](file://./lib/skills/brand/SKILL.md)\n")
     (.mkdirs (io/file @root ".claude"))
     (core/update! @root {})
-    (spit (io/file @root ".toolbox" "skills" "brand" "assets" "lockup.svg") "local tweak")
-    (io/delete-file (io/file @root "lib/skills/brand/assets/lockup.svg"))
+    (spit (io/file @root ".toolbox" "skills" "brand" "assets" "alt" "lockup.svg") "local tweak")
+    (io/delete-file (io/file @root "lib/skills/brand/assets/alt/lockup.svg"))
+    (io/delete-file (io/file @root "lib/skills/brand/assets/alt"))
     (let [result (core/update! @root {})
           files  (get-in (manifest/load-manifest @root) ["skills" "brand" "files"])]
       (should (:ok result))
       (should= #{"SKILL.md" "assets/marque.svg"} (set (keys files)))
-      (should-not (.exists (io/file @root ".toolbox" "skills" "brand" "assets" "lockup.svg")))
-      (should-not (.exists (io/file @root ".claude" "skills" "brand" "assets" "lockup.svg")))
+      (should-not (.exists (io/file @root ".toolbox" "skills" "brand" "assets" "alt")))
+      (should-not (.exists (io/file @root ".claude" "skills" "brand" "assets" "alt")))
+      (should (.exists (io/file @root ".claude" "skills" "brand" "assets" "marque.svg")))
       (should= 1 (count (:backed-up result)))
       (should= "local tweak" (slurp (io/file @root (first (:backed-up result)))))
       (should= 2 (count (:removed-files result))))))

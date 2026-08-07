@@ -91,6 +91,20 @@
     (when (.exists dir)
       (doseq [f (reverse (file-seq dir))] (io/delete-file f true)))))
 
+(defn delete-empty-parents!
+  "After deleting a file, remove any directories it has left empty, walking
+   up to (but never including or beyond) stop-dir."
+  [file stop-dir]
+  (let [stop (.getCanonicalPath (io/file stop-dir))]
+    (loop [d (.getParentFile (io/file file))]
+      (when (and d
+                 (.isDirectory d)
+                 (not= (.getCanonicalPath d) stop)
+                 (.startsWith (.getCanonicalPath d) (str stop java.io.File/separator))
+                 (empty? (seq (.list d)))
+                 (.delete d))
+        (recur (.getParentFile d))))))
+
 (defn- delete-recursively! [dir]
   (doseq [f (reverse (file-seq (io/file dir)))]
     (io/delete-file f true)))
