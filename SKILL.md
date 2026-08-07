@@ -565,10 +565,14 @@ When fetching a skill's `SKILL.md`, parse it for relative markdown links to disc
 **Match patterns:**
 - `[text](references/foo.md)` — standard markdown link with relative path
 - `[text](some/path.md)` — any relative path (no scheme, no leading `/`)
+- `` `assets/logo.svg` `` — bare relative paths in inline code spans, the common way skills reference non-markdown assets. These are **candidates**, held to a stricter shape (contains `/`, ends in a file extension, no spaces or template placeholders, no leading dot) and fetch misses are skipped **silently** — unlike markdown-link references, whose fetch failures warn.
 
 **Exclude:**
 - Absolute URLs (`https://...`, `http://...`, `file://...`)
 - Anchor links (`#section`)
+- Paths that escape the component's own directory (`../other-skill/SKILL.md`) — those are links to **other components**, not reference files of this one. Components have no dependencies (see Limitations); a skill that needs another skill's content links to it, and the project declares both.
+
+**`file://` skills skip discovery entirely:** the source directory **is** the component. Cache every file under it (dotfiles excluded), so assets are recorded and protected whether or not the markdown mentions them.
 
 **Resolve:** Given a skill URL like `https://example.com/skills/solid/SKILL.md`, the base URL is `https://example.com/skills/solid/`. A reference `references/tdd.md` resolves to `https://example.com/skills/solid/references/tdd.md`.
 

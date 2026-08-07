@@ -33,7 +33,9 @@
   "Fetch a component and bring its cache files to the fetched state under the
    Prime Directive. Returns the new manifest entry."
   [root {:keys [type name url declared-in] :as component} old-entry report]
-  (let [{:keys [files source-file]} (fetch/fetch-component component root root)
+  (let [{:keys [files source-file warnings]} (fetch/fetch-component component root root)
+        _ (doseq [w warnings]
+            (note! report :warnings {:component name :type type :error w}))
         old-files (get old-entry "files" {})
         dir       (manifest/cache-dir root type name)
         hashes

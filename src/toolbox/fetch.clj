@@ -59,16 +59,55 @@
     :else
     (throw (ex-info (str "unsupported url scheme: " url) {:url url}))))
 
+(defn- source-dir-files
+  "All files under a skill's source directory as relative paths, dotfile
+   segments excluded. For file:// skills the directory IS the component."
+  [dir]
+  (let [base (.toPath (io/file dir))]
+    (->> (file-seq (io/file dir))
+         (filter #(.isFile ^java.io.File %))
+         (map #(str (.relativize base (.toPath ^java.io.File %))))
+         (remove (fn [rel] (some #(str/starts-with? % ".") (str/split rel #"/"))))
+         sort
+         vec)))
+
 (defn fetch-component
   "Fetch a component's full file set.
-   Returns {:files {relpath content} :source-file f-or-nil}. Skills get
-   reference discovery; other types are single files cached as {name}.md."
+   Returns {:files {relpath content} :source-file f-or-nil :warnings [msg]}.
+   file:// skills cache their whole source directory; https:// skills get
+   markdown-link reference discovery (fetch failures warn) plus inline-code
+   asset discovery (fetch misses are skipped silently — they are candidates,
+   not declarations). Other types are single files cached as {name}.md."
   [{:keys [type name url]} declaring-dir root]
   (let [{:keys [content fetch-rel source-file]} (fetcher url declaring-dir root)]
-    (if (= type "skills")
-      (let [refs  (parse/reference-paths content)
-            files (reduce (fn [m rel] (assoc m rel (fetch-rel rel)))
+    (cond
+      (not= type "skills")
+      {:files {(str name ".md") content} :source-file source-file :warnings []}
+
+      source-file
+      (let [dir   (.getParentFile source-file)
+            files (reduce (fn [m rel] (assoc m rel (slurp (io/file dir rel))))
                           {"SKILL.md" content}
-                          refs)]
-        {:files files :source-file source-file})
-      {:files {(str name ".md") content} :source-file source-file})))
+                          (source-dir-files dir))]
+        {:files files :source-file source-file :warnings []})
+
+      :else
+      (let [with-refs
+            (reduce (fn [state rel]
+                      (try
+                        (update state :files assoc rel (fetch-rel rel))
+                        (catch Exception e
+                          (update state :warnings conj
+                                  (str "reference " rel ": " (.getMessage e))))))
+                    {:files {"SKILL.md" content} :warnings []}
+                    (parse/reference-paths content))
+            with-assets
+            (reduce (fn [state rel]
+                      (if (contains? (:files state) rel)
+                        state
+                        (try
+                          (update state :files assoc rel (fetch-rel rel))
+                          (catch Exception _ state))))
+                    with-refs
+                    (parse/asset-paths content))]
+        (assoc with-assets :source-file nil)))))

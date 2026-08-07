@@ -37,9 +37,22 @@
           (recur more current acc)))
       acc)))
 
+(defn escapes-component-dir?
+  "True when a relative path climbs above the component's own directory.
+   Such paths are cross-component links, not reference files."
+  [path]
+  (loop [segs (remove #{"." ""} (str/split path #"/"))
+         depth 0]
+    (if-let [[seg & more] (seq segs)]
+      (if (= seg "..")
+        (or (zero? depth) (recur more (dec depth)))
+        (recur more (inc depth)))
+      false)))
+
 (defn reference-paths
   "Relative markdown link targets in skill text: no scheme, no leading /,
-   no anchors. Anchor suffixes are stripped."
+   no anchors, and nothing that escapes the component directory. Anchor
+   suffixes are stripped."
   [text]
   (->> (re-seq #"\[[^\]]*\]\(([^)\s]+)\)" text)
        (map second)
@@ -49,5 +62,27 @@
                     (str/starts-with? % "mailto:")))
        (map #(first (str/split % #"#")))
        (remove str/blank?)
+       (remove escapes-component-dir?)
+       distinct
+       vec))
+
+(defn asset-paths
+  "Bare relative file paths mentioned in inline code spans — how skills
+   commonly reference non-markdown assets (`assets/logo.svg`). Conservative:
+   relative, contains a directory separator, ends in a file extension, no
+   spaces or template placeholders, doesn't start with a dot, stays inside
+   the component directory. These are candidates only — callers skip fetch
+   misses silently."
+  [text]
+  (->> (re-seq #"`([^`\n]+)`" text)
+       (map second)
+       (filter #(re-matches #"[^\s{}<>*$]+" %))
+       (remove #(or (str/includes? % "://")
+                    (str/starts-with? % "/")
+                    (str/starts-with? % "#")
+                    (str/starts-with? % ".")))
+       (filter #(str/includes? % "/"))
+       (filter #(re-find #"\.[A-Za-z0-9]{1,8}$" %))
+       (remove escapes-component-dir?)
        distinct
        vec))

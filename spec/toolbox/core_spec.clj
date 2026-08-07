@@ -29,6 +29,25 @@
                "### Commands\n- [test](file://./lib/commands/test.md)\n"))
   (.mkdirs (io/file root ".claude")))
 
+(describe "file:// skills cache their whole source directory"
+  (with root (temp-root))
+
+  (it "records and projects assets never mentioned in markdown links"
+    (write! @root "lib/skills/brand/SKILL.md"
+            "# Brand\nMarque: `assets/marque.svg` | table cell |")
+    (write! @root "lib/skills/brand/assets/marque.svg" "<svg>marque</svg>")
+    (write! @root "lib/skills/brand/assets/lockup.svg" "<svg>lockup</svg>")
+    (write! @root "AGENTS.md"
+            "## Toolbox\n### Skills\n- [brand](file://./lib/skills/brand/SKILL.md)\n")
+    (.mkdirs (io/file @root ".claude"))
+    (let [result (core/update! @root {})
+          files  (get-in (manifest/load-manifest @root) ["skills" "brand" "files"])]
+      (should (:ok result))
+      (should= #{"SKILL.md" "assets/marque.svg" "assets/lockup.svg"} (set (keys files)))
+      (should= "<svg>lockup</svg>"
+               (slurp (io/file @root ".claude" "skills" "brand" "assets" "lockup.svg")))
+      (should= [] (:warnings result)))))
+
 (describe "update! end to end (file:// fixtures)"
   (with root (temp-root))
   (before (fixture-project @root))

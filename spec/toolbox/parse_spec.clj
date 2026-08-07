@@ -64,4 +64,24 @@ Uses [toolbox](https://example.com/SKILL.md).
 
   (it "strips anchor suffixes and dedupes"
     (should= ["notes.md"]
-             (parse/reference-paths "[a](notes.md#one) [b](notes.md#two) [c](notes.md)"))))
+             (parse/reference-paths "[a](notes.md#one) [b](notes.md#two) [c](notes.md)")))
+
+  (it "excludes cross-component links that escape the component directory"
+    (should= [] (parse/reference-paths "[schema](../c3kit-schema/SKILL.md)"))
+    (should= ["a/../a/b.md"] (parse/reference-paths "[ok](a/../a/b.md) [bad](a/../../x.md)"))))
+
+(describe "asset-paths"
+  (it "finds bare relative file paths in inline code spans"
+    (should= ["assets/horton-audiology-marque.svg" "assets/logo.png"]
+             (parse/asset-paths
+              "Marques: `assets/horton-audiology-marque.svg` and | `assets/logo.png` |")))
+
+  (it "ignores commands, placeholders, dotted paths, absolute paths, urls, and escapes"
+    (should= []
+             (parse/asset-paths
+              (str "`bb spec` `.toolbox/skills/{name}/SKILL.md` `/abs/x.svg` "
+                   "`https://x.com/a.svg` `../other/logo.svg` `no-slash.svg` "
+                   "`with space/x.svg`"))))
+
+  (it "requires a file extension"
+    (should= [] (parse/asset-paths "`assets/subdir`"))))
